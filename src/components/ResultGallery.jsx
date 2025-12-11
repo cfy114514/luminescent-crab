@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
-import { Download, Maximize2, X, Image as ImageIcon } from 'lucide-react';
+import { Download, Maximize2, X, Image as ImageIcon, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 const ResultGallery = ({ results }) => {
     const [selectedImage, setSelectedImage] = useState(null);
+    const [isZipping, setIsZipping] = useState(false);
 
     if (!results) {
         return (
@@ -25,11 +28,50 @@ const ResultGallery = ({ results }) => {
         document.body.removeChild(link);
     };
 
+    const handleDownloadAll = async () => {
+        setIsZipping(true);
+        const zip = new JSZip();
+        const folder = zip.folder("product-ai-images");
+
+        const images = Object.values(results);
+
+        await Promise.all(images.map(async (img) => {
+            // Fetch blob from data URL or remote URL
+            const response = await fetch(img.url);
+            const blob = await response.blob();
+            // Sanitize filename
+            const filename = `${img.label.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '')}.png`;
+            folder.file(filename, blob);
+        }));
+
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, `product-ai-set-${Date.now()}.zip`);
+        setIsZipping(false);
+    };
+
     const images = Object.values(results);
 
     return (
         <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
+                {/* Header Action Bar */}
+                <div className="md:col-span-2 flex justify-end gap-2 mb-2">
+                    <button
+                        onClick={handleDownloadAll}
+                        disabled={isZipping}
+                        className="flex items-center space-x-2 text-xs text-white hover:bg-white/10 transition-colors px-3 py-1.5 rounded-full border border-white/20"
+                    >
+                        {isZipping ? (
+                            <span className="animate-pulse">打包中...</span>
+                        ) : (
+                            <>
+                                <Package className="w-3 h-3" />
+                                <span>全部打包下载 (.zip)</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+
                 {images.map((item, index) => (
                     <motion.div
                         key={item.label}

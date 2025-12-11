@@ -3,29 +3,99 @@ import UploadZone from './components/UploadZone';
 import ResultGallery from './components/ResultGallery';
 import ConfigPanel from './components/ConfigPanel';
 import RequestInspector from './components/RequestInspector';
-import { generateImages } from './services/api';
+import { generateImages, analyzeImages } from './services/api';
 import { Sparkles, Loader2, Play, Code } from 'lucide-react';
 
 function App() {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [visualProgress, setVisualProgress] = useState(0); // Smooth interpolated progress
+  const [statusMessage, setStatusMessage] = useState(""); // Granular Status
+
   // Store multiple files for context
   const [referenceImages, setReferenceImages] = useState([]);
+
+  // Mock Progress Interpolation
+  React.useEffect(() => {
+    let interval;
+    if (isProcessing && progress.total > 0) {
+      // Calculate real percentage
+      const realPercent = (progress.current / progress.total) * 100;
+
+      // Calculate "Next Step" target (fake it 'til you make it)
+      // If we are at step 0, aim for 80% of step 1 (approx 15-20% global)
+      // If we are at step 1, aim for 80% of step 2...
+      const stepSize = 100 / progress.total;
+      const targetFakePercent = Math.min(realPercent + (stepSize * 0.8), 99);
+
+      interval = setInterval(() => {
+        setVisualProgress(prev => {
+          // If we are far behind real status (e.g. jumped from 0 to 1), catch up fast
+          if (prev < realPercent) {
+            return prev + (realPercent - prev) * 0.2;
+          }
+          // Otherwise creep slowly towards the fake target
+          if (prev < targetFakePercent) {
+            return prev + 0.1; // Slow creep
+          }
+          return prev;
+        });
+      }, 50); // Update every 50ms
+    } else if (!isProcessing) {
+      setVisualProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [isProcessing, progress]);
 
   // Inspector State
   const [lastPayload, setLastPayload] = useState(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
-  // Configuration State
   const [config, setConfig] = useState({
     ethnicity: 'asian',
     gender: 'female',
     scene: '',
     clothing: '',
     hairColor: '',
-    description: ''
+    description: '',
+    includeProductViews: true, // Default: Generate Spec
+    includeModelView: true,     // Default: Generate Model
+    viewSelection: {
+      front: true,
+      angle_front: true,
+      back: true,
+      top: true,
+      inside: true,
+      detail: true
+    }
   });
+
+  const handleAnalyze = async () => {
+    if (referenceImages.length === 0) {
+      setError("请先上传参考图片");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setStatusMessage("AI is reading topology...");
+    setError(null);
+    try {
+      const analysisText = await analyzeImages(referenceImages);
+      setConfig(prev => ({
+        ...prev,
+        description: analysisText
+      }));
+    } catch (err) {
+      console.error("Analysis Error:", err);
+      setError(`分析失败: ${err.message}`);
+    } finally {
+      setIsAnalyzing(false);
+      setStatusMessage("");
+    }
+  };
 
   const handleGenerate = async () => {
     if (referenceImages.length === 0) {
@@ -33,19 +103,42 @@ function App() {
       return;
     }
 
+    if (!config.includeProductViews && !config.includeModelView) {
+      setError("请至少选择一种生成类型（产品套图 或 模特展示）");
+      return;
+    }
+
     setIsProcessing(true);
-    setResults(null);
+    setStatusMessage("Initializing engines...");
+    setResults({});
+    setProgress({ current: 0, total: 1 }); // Start with dummy total to trigger UI
+    setVisualProgress(0);
     setError(null);
 
     try {
-      // Pass ALL reference images to API
-      const data = await generateImages(referenceImages, config);
-      setResults(data.images);
+      // Pass callback for real-time updates AND Status
+      const data = await generateImages(
+        referenceImages,
+        config,
+        (key, url, current, total) => {
+          setResults(prev => ({ ...prev, [key]: { url, label: key } }));
+          setProgress({ current, total });
+        },
+        (status) => {
+          setStatusMessage(status); // Real-time text update
+        }
+      );
+
+      setResults(prev => ({ ...prev, ...data.images }));
       setLastPayload(data.payload);
+
     } catch (err) {
-      setError("生成失败，请重试");
+      console.error("Global Generation Error:", err);
+      setError(`生成失败: ${err.message}`);
     } finally {
       setIsProcessing(false);
+      setProgress({ current: 0, total: 0 });
+      setStatusMessage("");
     }
   };
 
@@ -82,9 +175,9 @@ function App() {
           {/* Upload Section */}
           <div className="flex-1 min-h-[300px]">
             <UploadZone
-              files={referenceImages}
-              onFilesChange={(files) => {
-                setReferenceImages(files);
+              images={referenceImages}
+              onImagesChange={(newImages) => {
+                setReferenceImages(newImages);
                 setResults(null);
                 setError(null);
               }}
@@ -94,7 +187,12 @@ function App() {
 
           {/* Config Section */}
           <div className="flex-shrink-0">
-            <ConfigPanel config={config} setConfig={setConfig} />
+            <ConfigPanel
+              config={config}
+              setConfig={setConfig}
+              onAnalyze={handleAnalyze}
+              isAnalyzing={isAnalyzing}
+            />
           </div>
         </div>
 
@@ -105,15 +203,29 @@ function App() {
           <div className="flex-1 bg-slate-900/20 rounded-2xl border border-white/5 p-6 overflow-y-auto custom-scrollbar relative">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-slate-300">生成结果 (Output Gallery)</h3>
-              {lastPayload && (
-                <button
-                  onClick={() => setIsInspectorOpen(true)}
-                  className="flex items-center space-x-2 text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20"
-                >
-                  <Code className="w-3 h-3" />
-                  <span>查看 API 请求</span>
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {isProcessing && progress.total > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-32 h-2 bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                        style={{ width: `${visualProgress}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-blue-400 font-mono">
+                      {Math.round(visualProgress)}%
+                    </span>
+                  </div>
+                )}
+                {lastPayload && (
+                  <button
+                    onClick={() => setIsInspectorOpen(true)}
+                    className="flex items-center space-x-2 text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20"
+                  >
+                    <Code className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             </div>
             <ResultGallery results={results} />
           </div>
@@ -137,10 +249,18 @@ function App() {
               `}
             >
               {isProcessing ? (
-                <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  正在生成变体...
-                </>
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-sm">{statusMessage || "Processing..."}</span>
+                  </div>
+                  {progress.total > 0 && (
+                    <span className="text-[10px] opacity-50 mt-1 font-mono tracking-widest">
+                      {/* Optional: Add a subtle loading bar inside the button too or just text */}
+                      PROCESSING {progress.current}/{progress.total}
+                    </span>
+                  )}
+                </div>
               ) : (
                 <>
                   <Play className="w-6 h-6 fill-current" />

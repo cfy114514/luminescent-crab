@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User2, MapPin, Shirt, Palette } from 'lucide-react';
+import { User2, MapPin, Shirt, Palette, Layers, Sparkles } from 'lucide-react';
 
-const ConfigPanel = ({ config, setConfig }) => {
+const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
     const handleChange = (key, value) => {
         setConfig(prev => ({ ...prev, [key]: value }));
     };
@@ -13,6 +13,120 @@ const ConfigPanel = ({ config, setConfig }) => {
                 <span className="w-1 h-6 bg-purple-500 rounded-full mr-3" />
                 参数设置
             </h3>
+
+            {/* Feature Description (Moved to Top) */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <label className="text-sm text-yellow-500/80 flex items-center gap-2 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> 产品特征描述 (关键 / JSON)
+                    </label>
+                    {onAnalyze && (
+                        <button
+                            onClick={onAnalyze}
+                            disabled={isAnalyzing}
+                            className="text-xs flex items-center gap-1 px-2 py-1 rounded bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 transition-colors disabled:opacity-50"
+                        >
+                            {isAnalyzing ? (
+                                <span className="animate-pulse">Analyzing...</span>
+                            ) : (
+                                <>
+                                    <Sparkles className="w-3 h-3" />
+                                    AI 智能分析
+                                </>
+                            )}
+                        </button>
+                    )}
+                </div>
+                <textarea
+                    value={config.description || ''}
+                    onChange={(e) => handleChange('description', e.target.value)}
+                    placeholder="例如：Logo位于左侧（非居中），帽檐左边比右边宽... (或者粘贴 AI 分析的 JSON)"
+                    rows={6}
+                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-yellow-500/30 outline-none transition-all resize-y min-h-[120px] text-sm font-mono"
+                />
+                <p className="text-xs text-slate-500">* 用于纠正AI对非对称设计的偏差，请详细描述或使用 JSON。</p>
+            </div>
+
+            {/* View Selection Toggles */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Product Spec Toggle Group */}
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-blue-500/20 rounded-full text-blue-400">
+                                <Layers className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-white">产品规范套图</p>
+                                <p className="text-xs text-slate-400">选择需要生成的标准视角</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={config.includeProductViews}
+                                onChange={(e) => handleChange('includeProductViews', e.target.checked)}
+                            />
+                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+
+                    {/* Sub-Selection Grid */}
+                    {config.includeProductViews && config.viewSelection && (
+                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-blue-500/20 pl-1">
+                            {[
+                                { k: 'front', l: '正面 (Front)' },
+                                { k: 'angle_front', l: '斜侧 (Angle)' },
+                                { k: 'back', l: '背面 (Back)' },
+                                { k: 'top', l: '顶视 (Top)' },
+                                { k: 'inside', l: '内饰 (Inside)' },
+                                { k: 'detail', l: '细节 (Detail)' }
+                            ].map(item => (
+                                <label key={item.k} className="flex items-center space-x-2 cursor-pointer group">
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config.viewSelection[item.k] ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800'}`}>
+                                        {config.viewSelection[item.k] && <div className="w-2 h-2 bg-white rounded-sm" />}
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={config.viewSelection[item.k]}
+                                        onChange={(e) => {
+                                            const newSelection = { ...config.viewSelection, [item.k]: e.target.checked };
+                                            handleChange('viewSelection', newSelection);
+                                        }}
+                                    />
+                                    <span className={`text-xs ${config.viewSelection[item.k] ? 'text-blue-200' : 'text-slate-500'} group-hover:text-blue-300 transition-colors`}>
+                                        {item.l}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Model View Toggle */}
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-500/20 rounded-full text-purple-400">
+                            <User2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-white">模特展示图 (1张)</p>
+                            <p className="text-xs text-slate-400">基于人种/场景配置生成</p>
+                        </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={config.includeModelView}
+                            onChange={(e) => handleChange('includeModelView', e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    </label>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Ethnicity */}
@@ -75,21 +189,6 @@ const ConfigPanel = ({ config, setConfig }) => {
                     placeholder="例如：休闲牛仔，正式西装..."
                     className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
                 />
-            </div>
-
-            {/* Feature Description */}
-            <div className="space-y-2">
-                <label className="text-sm text-yellow-500/80 flex items-center gap-2 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> 产品特征描述 (关键)
-                </label>
-                <textarea
-                    value={config.description || ''}
-                    onChange={(e) => handleChange('description', e.target.value)}
-                    placeholder="例如：Logo位于左侧（非居中），帽檐左边比右边宽..."
-                    rows={3}
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-yellow-500/30 outline-none transition-all resize-none text-sm"
-                />
-                <p className="text-xs text-slate-500">* 用于纠正AI对非对称设计的偏差，请详细描述。</p>
             </div>
 
             {/* Hair Color */}
