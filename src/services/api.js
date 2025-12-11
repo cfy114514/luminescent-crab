@@ -19,83 +19,81 @@ const fileToBase64 = (file) => {
 };
 
 // === Prompt Engineering for Views ===
+// === Prompt Engineering for Views ===
 const getViewPrompt = (viewType, config) => {
     // Spec Requirement: Pure White Background (to be post-processed to #F9F9F9), Studio Lighting 5500K.
-    const base = "Pure white background, Professional studio lighting 5500K, soft even light, no hard shadows, 8k resolution, minimalist commercial style.";
+    const base = "White background, Studio 5500K, 8k resolution.";
 
-    // Truth Enforcing Context
+    // Truth Enforcing Context (Radical 'Zero Creativity' Overhaul)
     let context = `
-SYSTEM ROLE: You are a 3D Rendering Engine, not a painter.
-TRUTH ENFORCING: The uploaded Reference Images are the ABSOLUTE TRUTH. 
-DO NOT alter the material, texture, or geometry shown in the references.
-DO NOT hallucinate details not present in the references.
+SYSTEM ROLE: You are a Photogrammetry Texture Extractor. You are NOT an artist.
+TASK: Perform a 3D Texture Projection from the Reference Images to a new Angle.
+CONSTRAINT: ZERO CREATIVITY.
+- DO NOT invent details.
+- DO NOT 'paint' missing areas. Use nearest-neighbor texture cloning if needed.
+- IF a feature is not visible in the reference, DO NOT RENDER IT. Leave it blank or smooth.
+- The Reference Images are the ONLY source of truth.
 
-TASK: Reconstruct the product EXACTLY as shown in the references, but change the CAMERA ANGLE as instructed below.
+CLEANUP PROTOCOL:
+- AUTOMATICALLY REMOVE any hang tags, price tags, plastic loops, or security tags.
+- Inpaint the area where the tag was removed with the surrounding material texture.
 `;
 
     // Inject JSON Topology if present (Parsed or Raw)
     if (config.description) {
         context += `
-TOPOLOGY DATA (JSON):
+TOPOLOGY CONSTRAINT (JSON):
 ${config.description}
-CONSTRAINT: Use the above JSON *only* to understand spatial relationships (e.g. is proper Logo Side Left or Right?).
-DO NOT use it to override the visual appearance of the Reference Images.
+INSTRUCTION: Use JSON ONLY to confirm presence/absence of features (e.g. "No Band").
 `;
     }
 
     switch (viewType) {
         case 'front':
             return `${context} 
-ACTION: Rotate the object strictly to 0-degrees (Front). 
-REQUIREMENT: Perfect symmetry (unless JSON says otherwise). Horizontal brim.
-VISIBILITY: Side features (Logos/pins mentioned in JSON) must remain on the SIDE (edges), NOT moved to the front face. ${base}`;
+ACTION: Project texture to 0-degree Front View. 
+VERIFICATION: If JSON says 'No Band', ensure NO BAND is rendered.
+OUTPUT: Exact replica of the reference object, rotated to absolute front. ${base}`;
 
         case 'angle_front':
-            // Smart Angle Selection based on JSON
+            // Symmetrical check handled by caller or assumed standard
             return `${context} 
-ACTION: Rotate the object to a 45-degree Angled Front View (3/4 view).
-INTELLIGENT SELECTION: Check the 'feature_side' in the JSON Topology.
-- If feature_side == 'left': Generate LEFT-FRONT angle.
-- If feature_side == 'right': Generate RIGHT-FRONT angle.
-- If symmetrical: Default to Right-Front.
-REQUIREMENT: Show volumetric structure. ${base}`;
+ACTION: Project texture to 45-degree Angled View.
+CONSTRAINT: Maintain rigid geometry. Do not warp the brim. ${base}`;
 
         case 'back':
             return `${context} 
-ACTION: Rotate the object strictly to 180-degrees (Back).
-REQUIREMENT: Focus on the rear view. 
-SPECIFIC REAR DETAILS (from JSON): Use 'back_view_details' if available. 
-VISIBILITY: Front features must be HIDDEN. ${base}`;
+ACTION: Project texture to 180-degree Back View.
+CRITICAL: If 'back_view_details' in JSON is empty or says 'None', render a smooth, featureless back.
+DO NOT hallucinate a logo or buckle on the back unless explicitly seen in a Back View reference image. ${base}`;
 
         case 'top_overhead':
             return `${context} 
-ACTION: Place camera at 90-degrees zenith (Top Down).
-REQUIREMENT: Flat lay. Show crown symmetry and brim shape. 
-SPECIFIC TOP DETAILS (from JSON): Use 'top_view_details' if available. ${base}`;
+ACTION: Project texture to 90-degree Top View (Flat Lay).
+CONSTRAINT: Perfect circle/oval crown geometry. ${base}`;
 
         case 'inside':
             return `${context} 
-ACTION: Flip the object 180-degrees upside down.
-REQUIREMENT: Show the INTERIOR (Lining, sweatband, label).
-SPECIFIC INSIDE DETAILS (from JSON): Use 'inside_view_details' if available.
-VISIBILITY: Exterior top features must be HIDDEN. ${base}`;
+ACTION: Project texture to Inside View (Upside down).
+CONSTRAINT: Show internal lining/sweatband ONLY if visible in reference. Otherwise, generic dark/light void. ${base}`;
 
         case 'detail':
             return `${context} 
-ACTION: Zoom in (Macro Link).
-REQUIREMENT: Focus on Material Texture and Stitching quality. Shallow depth of field f/2.8. ${base}`;
+ACTION: Crop and Magnify 5x.
+FOCUS: Texture grain. Do not change the weave pattern. ${base}`;
 
         case 'model':
             const modelDesc = `${config.ethnicity || 'asian'} ${config.gender || 'female'} model`;
             const scene = config.scene ? `in a ${config.scene}` : "studio lighting";
-            return `${context} 
-ACTION: Render a Commercial Fashion Shot.
-SUBJECT: ${modelDesc} wearing the product.
+            return `
+SYSTEM ROLE: Commercial Fashion Compositor.
+TASK: Composite the Reference Product onto a ${modelDesc}.
 SCENE: ${scene}.
-REQUIREMENT: Photorealistic, natural fit. ${base}`;
+CONSTRAINT: The product appearance (texture/shape) must remain IDENTICAL to the reference.
+Do not wrap or warp the product unrealistically. ${base}`;
 
         default:
-            return `${context} Photo of product. ${base}`;
+            return `${context} Projection of product. ${base}`;
     }
 };
 
@@ -224,7 +222,9 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
     // Build Task List
     let tasks = [];
     if (config.includeProductViews) {
-        const selectedSpecs = specTasks.filter(task => config.viewSelection ? config.viewSelection[task.type] : true);
+        // BUG FIX: Use 'task.key' (e.g. 'top') to check config, NOT 'task.type' (e.g. 'top_overhead')
+        // App.jsx keys: front, angle_front, back, top, inside, detail
+        const selectedSpecs = specTasks.filter(task => config.viewSelection ? config.viewSelection[task.key] : true);
         tasks = [...tasks, ...selectedSpecs];
     }
     if (config.includeModelView) tasks = [...tasks, modelTask];
@@ -273,10 +273,16 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
         updateStatus("Anchor Injected. Starting Parallel Ensuing...");
     }
 
-    // 4. Execute Follow-up Tasks (Parallel)
+    // 4. Execute Follow-up Tasks (Parallel but Staggered)
     if (followUpTasks.length > 0) {
         updateStatus(`Phase 2: Generating ${followUpTasks.length} Variations...`);
-        const results = await Promise.all(followUpTasks.map(async (task) => {
+
+        // Use map then Promise.all, but inject a DELAY based on index
+        const results = await Promise.all(followUpTasks.map(async (task, index) => {
+            // ARTIFICIAL STAGGER: Wait 1.5s * index to force sequential-ish feeling
+            // This prevents "Boom, all done" and ensures users see them pop in 1 by 1
+            await delay(index * 1500);
+
             try {
                 const prompt = getViewPrompt(task.type, config);
                 const url = await generateSingleImage(currentContextImages, prompt, apiKey, apiUrl);
