@@ -1,0 +1,121 @@
+import React, { useState } from 'react';
+import { Download, Maximize2, X, Image as ImageIcon } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const ResultGallery = ({ results }) => {
+    const [selectedImage, setSelectedImage] = useState(null);
+
+    if (!results) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center">
+                    <ImageIcon className="w-8 h-8 opacity-50" />
+                </div>
+                <p>暂无生成结果，请上传图片并开始生成</p>
+            </div>
+        );
+    }
+
+    const handleDownload = (url, label) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `product-ai-${label}-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const images = Object.values(results);
+
+    return (
+        <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-20">
+                {images.map((item, index) => (
+                    <motion.div
+                        key={item.label}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className={`
+              relative group rounded-xl overflow-hidden glass-panel border border-white/5
+              ${index === 0 ? 'md:col-span-2 md:aspect-[2/1]' : 'aspect-square'}
+            `}
+                    >
+                        <img
+                            src={item.url}
+                            alt={item.label}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        />
+
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between">
+                                <span className="text-white font-medium">{item.label}</span>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => handleDownload(item.url, item.label)}
+                                        className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+                                        title="下载原图"
+                                    >
+                                        <Download className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedImage(item)}
+                                        className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+                                        title="查看大图"
+                                    >
+                                        <Maximize2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                ))}
+            </div>
+
+            {/* Lightbox / Zoom Modal */}
+            <AnimatePresence>
+                {selectedImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-xl p-4"
+                        onClick={() => setSelectedImage(null)}
+                    >
+                        <button
+                            onClick={() => setSelectedImage(null)}
+                            className="absolute top-4 right-4 p-2 text-white/50 hover:text-white transition-colors"
+                        >
+                            <X className="w-8 h-8" />
+                        </button>
+
+                        <motion.img
+                            initial={{ scale: 0.9 }}
+                            animate={{ scale: 1 }}
+                            exit={{ scale: 0.9 }}
+                            src={selectedImage.url}
+                            alt={selectedImage.label}
+                            className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+                            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking image
+                        />
+
+                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDownload(selectedImage.url, selectedImage.label);
+                                }}
+                                className="px-6 py-2 bg-white text-black rounded-full font-medium hover:bg-slate-200 transition-colors flex items-center gap-2"
+                            >
+                                <Download className="w-4 h-4" />
+                                下载图片
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
+    );
+};
+
+export default ResultGallery;
