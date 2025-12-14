@@ -22,75 +22,140 @@ const fileToBase64 = (file) => {
 // === Prompt Engineering for Views ===
 const getViewPrompt = (viewType, config) => {
     // Spec Requirement: Pure White Background (to be post-processed to #F9F9F9), Studio Lighting 5500K.
-    const base = "White background, Studio 5500K, 8k resolution.";
+    // Added "NO shadows, NO filters" to base prompt.
+    const base = "White background, Studio 5500K, 8k resolution. NO dramatic shadows, NO artistic filters, NO post-processing styles.";
 
     // Truth Enforcing Context (Radical 'Zero Creativity' Overhaul)
     let context = `
-SYSTEM ROLE: You are a Photogrammetry Texture Extractor. You are NOT an artist.
-TASK: Perform a 3D Texture Projection from the Reference Images to a new Angle.
-CONSTRAINT: ZERO CREATIVITY.
-- DO NOT invent details.
-- DO NOT 'paint' missing areas. Use nearest-neighbor texture cloning if needed.
-- IF a feature is not visible in the reference, DO NOT RENDER IT. Leave it blank or smooth.
-- The Reference Images are the ONLY source of truth.
+SYSTEM ROLE: You are a Scientific Photogrammetry Engine. You are NOT an artist.
+PRIME DIRECTIVE: ACCURACY > AESTHETICS.
+TASK: Project the reference product texture onto a 3D manifold at the requested angle.
+
+STRICT CONSTRAINTS (VIOLATION = FAILURE):
+1. **ZERO HALLUCINATION**: If you don't see it in the reference, DO NOT RENDER IT. Leave unseen areas generic and smooth. Never invent logos, buckles, or complex stitching just to fill empty space.
+2. **GEOMETRIC RIGIDITY**: Treat the object as a solid, rigid form. Do not warp, bend, or melt the silhouette to make it look "dynamic". Maintain industrial design proportions.
+3. **TEXTURE CLONING**: Copy the exact weave, grain, and color from the reference. Do not apply "artistic effects" or change the material properties (e.g., don't turn cotton into silk).
+4. **LIGHTING NEUTRALITY**: Use flat, even studio lighting to reveal truth. Avoid mood lighting.
 
 CLEANUP PROTOCOL:
-- AUTOMATICALLY REMOVE any hang tags, price tags, plastic loops, or security tags.
-- Inpaint the area where the tag was removed with the surrounding material texture.
+- REMOVE all hang tags, price tags, barcodes, and plastic security loops.
+- INPAINT the removal area with the adjacent material texture.
 `;
 
     // Inject JSON Topology if present (Parsed or Raw)
     if (config.description) {
         context += `
-TOPOLOGY CONSTRAINT (JSON):
+TOPOLOGY CONSTRAINT (JSON API):
 ${config.description}
-INSTRUCTION: Use JSON ONLY to confirm presence/absence of features (e.g. "No Band").
+INSTRUCTION: Follow this topology STRICTLY. If JSON says "No Logo", DO NOT render a logo despite what you think you see.
 `;
     }
 
     switch (viewType) {
         case 'front':
             return `${context} 
-ACTION: Project texture to 0-degree Front View. 
-VERIFICATION: If JSON says 'No Band', ensure NO BAND is rendered.
-OUTPUT: Exact replica of the reference object, rotated to absolute front. ${base}`;
+ACTION: Generate 0-degree Front View.
+VERIFICATION: Pixel-perfect match to reference. This is the GROUND TRUTH. ${base}`;
 
         case 'angle_front':
-            // Symmetrical check handled by caller or assumed standard
             return `${context} 
-ACTION: Project texture to 45-degree Angled View.
-CONSTRAINT: Maintain rigid geometry. Do not warp the brim. ${base}`;
+ACTION: Rotate object exactly 45 degrees.
+CONSTRAINT: Do not distort the proportions. Keep the perspective telephoto (low distortion), not wide-angle. Maintain RIGID structural integrity. ${base}`;
 
         case 'back':
             return `${context} 
-ACTION: Project texture to 180-degree Back View.
-CRITICAL: If 'back_view_details' in JSON is empty or says 'None', render a smooth, featureless back.
-DO NOT hallucinate a logo or buckle on the back unless explicitly seen in a Back View reference image. ${base}`;
+ACTION: Rotate object 180 degrees.
+CRITICAL WARNING: The back is often blank. Do NOT invent a "Back Logo" or "Adjustable Strap" unless the JSON or Reference explicitly confirms it. When in doubt, render it SMOOTH. ${base}`;
 
         case 'top_overhead':
             return `${context} 
-ACTION: Project texture to 90-degree Top View (Flat Lay).
-CONSTRAINT: Perfect circle/oval crown geometry. ${base}`;
+ACTION: 90-degree Flat Lay View.
+CONSTRAINT: Perfect symmetry. Ensure the opening/brim is geometrically perfect (circle or oval). ${base}`;
 
         case 'inside':
             return `${context} 
-ACTION: Project texture to Inside View (Upside down).
-CONSTRAINT: Show internal lining/sweatband ONLY if visible in reference. Otherwise, generic dark/light void. ${base}`;
+ACTION: Inside View.
+CONSTRAINT: Show construction reality. If unlined, show raw material back. Do not invent a satin lining if not present. ${base}`;
 
         case 'detail':
             return `${context} 
-ACTION: Crop and Magnify 5x.
-FOCUS: Texture grain. Do not change the weave pattern. ${base}`;
+ACTION: Macro Zoom (5x).
+FOCUS: Surface micro-texture only. Ignore overall shape. Focus on the weave/grain. ${base}`;
 
-        case 'model':
+        case 'model_front':
+        case 'model_angle':
+        case 'model_side':
+        case 'model_back':
+        case 'model_lifestyle':
             const modelDesc = `${config.ethnicity || 'asian'} ${config.gender || 'female'} model`;
             const scene = config.scene ? `in a ${config.scene}` : "studio lighting";
-            return `
-SYSTEM ROLE: Commercial Fashion Compositor.
+
+            // Global Constraints (Wardrobe, Composition, Subject Priority)
+            const globalModelConstraints = `
+SYSTEM ROLE: Commercial Fashion Compositor & Virtual Stylist.
+GLOBAL MODEL CONSTRAINTS (ALL VIEWS):
+1. SUBJECT PRIORITY: The hat MUST occupy 50% of the visual weight. The model is the canvas; the hat is the HERO.
+2. COMPOSITION: Head-and-Shoulders or Half-Body crop ONLY. Fixed distance (1.3m).
+3. WARDROBE PROTOCOL (STRICT):
+    - NO patterns, prints, or logos on clothing.
+    - FABRIC: Linen, Cotton, or simple Knitwear.
+    - COLORS: Neutral, Light tones (White, Beige, Light Grey) ONLY. Dark/Neon forbidden.
+    - STYLE: Minimalist.
+4. LIGHTING: Soft, even lighting, 5500K. No hard shadows on face.
+5. BACKGROUND: Pure White or softly blurred Light Grey (#F9F9F9).
+
+VISIBILITY PHYSICS & REALISM PROTOCOL:
+1. CONDITIONAL VISIBILITY: Product details (Tags/Logos) are NOT necessarily visible from all angles.
+   - If a detail is occluded by the head curvature or angle, DO NOT RENDER IT.
+   - DO NOT warp geometry to force a logo to be visible in Side/Back views.
+2. NO ARTISTIC INTERPRETATION (STRICT):
+   - You are a camera, not a designer. DO NOT invent details.
+   - DO NOT move tags to make them visible. If they are hidden, they remain hidden.
+3. GRAVITY: Brim must be PARALLEL to the ground.
+4. NATURAL FIT: Hat sits naturally on the head.
+`;
+
+            let specificAction = "";
+            switch (viewType) {
+                case 'model_front':
+                    specificAction = `
+ACTION: Portrait Frontal View (0°).
+POSE: Faces camera directly. Direct eye contact.
+FOCUS: Hat perfectly centered. Show brim width and crown height clearly.`;
+                    break;
+                case 'model_angle':
+                    specificAction = `
+ACTION: Angled Front View (45°).
+POSE: Head turned slightly to side.
+FOCUS: Showcase volumetric structure of brim and crown curvature.`;
+                    break;
+                case 'model_side':
+                    specificAction = `
+ACTION: Side Profile View (90°).
+POSE: Looking straight ahead (off-camera).
+FOCUS: Sharp profile. Highlight brim silhouette (flat or curved). Edge lines must be razor sharp.`;
+                    break;
+                case 'model_back':
+                    specificAction = `
+ACTION: Rear View (180°).
+POSE: Back to camera.
+FOCUS: Show back of head and hat's rear design.
+CRITICAL DETAIL: If adjustment buckle/velcro exists, it MUST be visible and geometrically accurate. Show hair interaction naturally.`;
+                    break;
+                case 'model_lifestyle':
+                    specificAction = `
+ACTION: Lifestyle / Natural Pose.
+POSE: Hand gently touching edge of brim (fingers relaxed, NOT covering details) OR Looking down/smiling.
+VIBE: Relaxed, "Holiday" or "Daily Wear".
+CONSTRAINT: Even in action, hat shape must NOT be distorted.`;
+                    break;
+            }
+
+            return `${globalModelConstraints}
 TASK: Composite the Reference Product onto a ${modelDesc}.
 SCENE: ${scene}.
-CONSTRAINT: The product appearance (texture/shape) must remain IDENTICAL to the reference.
-Do not wrap or warp the product unrealistically. ${base}`;
+${specificAction}
+IMPORTANT: The product appearance (texture/shape) must remain IDENTICAL to the reference. Do not wrap or warp the product unrealistically. ${base}`;
 
         default:
             return `${context} Projection of product. ${base}`;
@@ -217,7 +282,15 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
         { key: 'inside', label: '内部细节 (Inside)', type: 'inside' },
         { key: 'detail', label: '纹理特写 (Detail)', type: 'detail' }
     ];
-    const modelTask = { key: 'model', label: '模特展示', type: 'model' };
+
+    // Updated Model Tasks based on new SOP
+    const modelTasks = [
+        { key: 'model_front', label: '模特展示-正面 (Front)', type: 'model_front' },
+        { key: 'model_angle', label: '模特展示-斜侧 (Angle)', type: 'model_angle' },
+        { key: 'model_side', label: '模特展示-侧面 (Side)', type: 'model_side' },
+        { key: 'model_back', label: '模特展示-背面 (Back)', type: 'model_back' },
+        { key: 'model_lifestyle', label: '模特展示-生活 (Lifestyle)', type: 'model_lifestyle' }
+    ];
 
     // Build Task List
     let tasks = [];
@@ -227,7 +300,14 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
         const selectedSpecs = specTasks.filter(task => config.viewSelection ? config.viewSelection[task.key] : true);
         tasks = [...tasks, ...selectedSpecs];
     }
-    if (config.includeModelView) tasks = [...tasks, modelTask];
+
+    // If Model View is enabled, add selected model sub-tasks
+    if (config.includeModelView) {
+        const selectedModels = modelTasks.filter(task =>
+            config.modelViewSelection ? config.modelViewSelection[task.key] : true
+        );
+        tasks = [...tasks, ...selectedModels];
+    }
 
     const totalTasks = tasks.length;
     let completedTasks = 0;

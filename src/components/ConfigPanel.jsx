@@ -105,26 +105,59 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                     )}
                 </div>
 
-                {/* Model View Toggle */}
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-purple-500/20 rounded-full text-purple-400">
-                            <User2 className="w-4 h-4" />
+                {/* Model View Toggle Group */}
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-purple-500/20 rounded-full text-purple-400">
+                                <User2 className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-white">模特展示图</p>
+                                <p className="text-xs text-slate-400">选择需要生成的模特视角</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm font-medium text-white">模特展示图 (1张)</p>
-                            <p className="text-xs text-slate-400">基于人种/场景配置生成</p>
-                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={config.includeModelView}
+                                onChange={(e) => handleChange('includeModelView', e.target.checked)}
+                            />
+                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={config.includeModelView}
-                            onChange={(e) => handleChange('includeModelView', e.target.checked)}
-                        />
-                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                    </label>
+
+                    {/* Sub-Selection Grid (New) */}
+                    {config.includeModelView && config.modelViewSelection && (
+                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-purple-500/20 pl-1">
+                            {[
+                                { k: 'model_front', l: '正面 (Front)' },
+                                { k: 'model_angle', l: '斜侧 (Angle)' },
+                                { k: 'model_side', l: '侧面 (Side)' },
+                                { k: 'model_back', l: '背面 (Back)' },
+                                { k: 'model_lifestyle', l: '生活 (Lifestyle)' }
+                            ].map(item => (
+                                <label key={item.k} className="flex items-center space-x-2 cursor-pointer group">
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config.modelViewSelection[item.k] ? 'bg-purple-500 border-purple-500' : 'border-slate-600 bg-slate-800'}`}>
+                                        {config.modelViewSelection[item.k] && <div className="w-2 h-2 bg-white rounded-sm" />}
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        className="hidden"
+                                        checked={config.modelViewSelection[item.k]}
+                                        onChange={(e) => {
+                                            const newSelection = { ...config.modelViewSelection, [item.k]: e.target.checked };
+                                            handleChange('modelViewSelection', newSelection);
+                                        }}
+                                    />
+                                    <span className={`text-xs ${config.modelViewSelection[item.k] ? 'text-purple-200' : 'text-slate-500'} group-hover:text-purple-300 transition-colors`}>
+                                        {item.l}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 

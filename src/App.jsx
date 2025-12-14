@@ -70,6 +70,13 @@ function App() {
       top: true,
       inside: true,
       detail: true
+    },
+    modelViewSelection: {
+      model_front: true,
+      model_angle: true,
+      model_side: true,
+      model_back: true,
+      model_lifestyle: true
     }
   });
 
