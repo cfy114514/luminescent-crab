@@ -20,26 +20,25 @@ const fileToBase64 = (file) => {
 
 // === Prompt Engineering for Views ===
 // === Prompt Engineering for Views ===
-const getViewPrompt = (viewType, config) => {
+const getViewPrompt = (viewType, config, availableLabels = []) => {
     // Spec Requirement: Pure White Background (to be post-processed to #F9F9F9), Studio Lighting 5500K.
     // Added "NO shadows, NO filters" to base prompt.
     const base = "White background, Studio 5500K, 8k resolution. NO dramatic shadows, NO artistic filters, NO post-processing styles.";
 
-    // Truth Enforcing Context (Radical 'Zero Creativity' Overhaul)
+    // Truth Enforcing Context (User Defined Strict Mode)
     let context = `
-SYSTEM ROLE: You are a Scientific Photogrammetry Engine. You are NOT an artist.
-PRIME DIRECTIVE: ACCURACY > AESTHETICS.
-TASK: Project the reference product texture onto a 3D manifold at the requested angle.
+SYSTEM ROLE: High-Fidelity Product Cutout & Display Engine.
+TASK: Show the product on a pure white background as an isolated object.
 
-STRICT CONSTRAINTS (VIOLATION = FAILURE):
-1. **ZERO HALLUCINATION**: If you don't see it in the reference, DO NOT RENDER IT. Leave unseen areas generic and smooth. Never invent logos, buckles, or complex stitching just to fill empty space.
-2. **GEOMETRIC RIGIDITY**: Treat the object as a solid, rigid form. Do not warp, bend, or melt the silhouette to make it look "dynamic". Maintain industrial design proportions.
-3. **TEXTURE CLONING**: Copy the exact weave, grain, and color from the reference. Do not apply "artistic effects" or change the material properties (e.g., don't turn cotton into silk).
-4. **LIGHTING NEUTRALITY**: Use flat, even studio lighting to reveal truth. Avoid mood lighting.
-
-CLEANUP PROTOCOL:
-- REMOVE all hang tags, price tags, barcodes, and plastic security loops.
-- INPAINT the removal area with the adjacent material texture.
+STRICT PROTOCOL (USER DEFINED):
+1. **RESTORE ALL SHOOTING DETAILS**: You must faithfully render the texture, weave, and imperfections. CRITICAL: Analyze the specific Reference Images and their assigned LABELS (e.g., 'Detail', 'Side') to understand exactly which feature corresponds to which view.
+2. **NO INVENTION**: Do not invent details out of thin air (不能凭空添加细节).
+3. **NO BEAUTIFICATION**: Do not beautify the product (不能美化产品). Show it as it is.
+4. **ALLOWED EDIT**: You may ONLY smooth wrinkles (只能抚平褶皱). Do not alter structural geometry.
+5. **MATERIAL TRUTH**: Do not use wrong color blocks or materials (不能使用错误的色块及材质).
+6. **NO IMAGINATION**: Do not generate non-existent things (不能使用想象生成不存在的东西).
+7. **SOURCE TRUTH**: ONLY use elements present in the image (只能使用图中有的元素).
+8. **LOGO CONSISTENCY**: For products with logos, maintain Uniform Logo Size and Position relative to the product body across all generated views (保持Logo大小及位置统一).
 `;
 
     // Inject JSON Topology if present (Parsed or Raw)
@@ -47,48 +46,108 @@ CLEANUP PROTOCOL:
         context += `
 TOPOLOGY CONSTRAINT (JSON API):
 ${config.description}
-INSTRUCTION: Follow this topology STRICTLY. If JSON says "No Logo", DO NOT render a logo despite what you think you see.
+INSTRUCTION: Follow this topology STRICTLY.
 `;
     }
 
+    // Inject Color Enforcement Protocol (Modular)
+    if (config.targetColor) {
+        context += `
+COLOR ENFORCEMENT PROTOCOL (OVERRIDE):
+- TARGET COLOR: ${config.targetColor}
+- ACTION: Recolor the base material of the product to match the Target Color EXACTLY.
+- CONSTRAINT: PRESERVE TEXTURE. Do not paint flat color. You must map the Target Color onto the existing weave/grain/surface topology.
+- SCOPE: Only the main product material. Do not recolor skin, background, or neutral hardware unless specified.
+`;
+    }
+
+    let prompt = "";
     switch (viewType) {
         case 'front':
-            return `${context} 
+            prompt = `${context} 
 ACTION: Generate 0-degree Front View.
 VERIFICATION: Pixel-perfect match to reference. This is the GROUND TRUTH. ${base}`;
+            break;
 
         case 'angle_front':
-            return `${context} 
+            prompt = `${context} 
 ACTION: Rotate object exactly 45 degrees.
 CONSTRAINT: Do not distort the proportions. Keep the perspective telephoto (low distortion), not wide-angle. Maintain RIGID structural integrity. ${base}`;
+            break;
 
         case 'back':
-            return `${context} 
+            const hasBackRef = availableLabels.some(l => l.includes('back'));
+            const backInstruction = hasBackRef ?
+                "REFERENCE AVAILABLE: Use the provided 'Back View' image as primary source." :
+                "MISSING BACK REFERENCE: Infer the back form from the 'Front View' silhouette. CRITICAL: Render the surface SMOOTH and PLAIN. Do NOT invent a Back Logo, Adjustable Strap, or Buckle unless explicitly seen in other views.";
+
+            prompt = `${context} 
 ACTION: Rotate object 180 degrees.
-CRITICAL WARNING: The back is often blank. Do NOT invent a "Back Logo" or "Adjustable Strap" unless the JSON or Reference explicitly confirms it. When in doubt, render it SMOOTH. ${base}`;
+LOGIC: ${backInstruction}
+CRITICAL WARNING: The back is often blank. When in doubt, render it SMOOTH. ${base}`;
+            break;
 
         case 'top_overhead':
-            return `${context} 
+            const hasTopRef = availableLabels.some(l => l.includes('top'));
+            const topInstruction = hasTopRef ?
+                "REFERENCE AVAILABLE: Use the provided 'Top View' image." :
+                "MISSING TOP REFERENCE: Infer the top geometry from the 'Front' and 'Side' brims. Assume standard symmetrical circle/oval shape.";
+
+            prompt = `${context} 
 ACTION: 90-degree Flat Lay View.
+LOGIC: ${topInstruction}
+ORIENTATION: The FRONT of the product must face the BOTTOM of the frame (6 o'clock).
 CONSTRAINT: Perfect symmetry. Ensure the opening/brim is geometrically perfect (circle or oval). ${base}`;
+            break;
 
         case 'inside':
-            return `${context} 
+            const hasInsideRef = availableLabels.some(l => l.includes('inside'));
+            const insideInstruction = hasInsideRef ?
+                "REFERENCE AVAILABLE: COPY the Reference Image's interior EXACTLY (Pattern/Tag)." :
+                "MISSING INSIDE REFERENCE: Render a GENERIC PLAIN interior. Match the color to the outer material or standard black/beige. Do NOT invent a lining pattern or brand tag.";
+
+            prompt = `${context} 
 ACTION: Inside View.
-CONSTRAINT: Show construction reality. If unlined, show raw material back. Do not invent a satin lining if not present. ${base}`;
+LOGIC: ${insideInstruction}
+CONSTRAINT: 
+- If reference is available, copy it. 
+- If missing, keep it minimal and realistic.
+- Do not invent a generic satin lining if the reference is unlined or different.`;
+            break;
 
         case 'detail':
-            return `${context} 
-ACTION: Macro Zoom (5x).
-FOCUS: Surface micro-texture only. Ignore overall shape. Focus on the weave/grain. ${base}`;
+            const hasDetailRef = availableLabels.some(l => l.includes('detail'));
+            const detailInstruction = hasDetailRef ?
+                "REFERENCE AVAILABLE: Use the provided 'Detail View' zoom-in as ground truth." :
+                "MISSING DETAIL REFERENCE: Use the highest resolution 'Front' or 'General' view. Do NOT invent micro-textures. If you can't see the weave, render smooth material.";
+
+            prompt = `${context} 
+ACTION: Macro Textural Shot (Micro-Photography).
+LOGIC: ${detailInstruction}
+CAMERA: 100mm Macro Lens. Aperture f/8 for sharp texture depth. Lighting angle 45° to reveal surface relief.
+CONSTRAINT: 
+- SINGLE FOCUS PRINCIPLE: It is IMPOSSIBLE to present all details in a single shot. Do not try to cram everything in. Focus intensely on ONE dominant feature and blur the periphery slightly if needed.
+- TEXTURE MATCH: The weave/grain must be identical to the zoom-in of the reference.
+- NO HALLUCINATION: Do not invent "fancy" textures. If it's canvas, render canvas.`;
+            break;
 
         case 'model_front':
         case 'model_angle':
         case 'model_side':
         case 'model_back':
         case 'model_lifestyle':
-            const modelDesc = `${config.ethnicity || 'asian'} ${config.gender || 'female'} model`;
-            const scene = config.scene ? `in a ${config.scene}` : "studio lighting";
+            // Logic for Model / Wardrobe / Hair / Scene
+            const hairLogic = config.hairColor ? `, hair color: ${config.hairColor}` : "";
+            const modelDesc = `${config.ethnicity || 'asian'} ${config.gender || 'female'} model${hairLogic}`;
+
+            const scene = config.scene ? `in a ${config.scene}` : "Pure White Background";
+            const wardrobeStyle = config.clothing ? config.clothing : "Match the product's style (Minimalist/Neutral).";
+
+            // Model View Fallback Logic (Restored)
+            let modelFallback = "";
+            if (viewType === 'model_back' && !availableLabels.some(l => l.includes('back'))) {
+                modelFallback = "MISSING BACK REFERENCE: Render the product back as PLAIN/SMOOTH. Do not invent details.";
+            }
 
             // Global Constraints (Wardrobe, Composition, Subject Priority)
             const globalModelConstraints = `
@@ -100,19 +159,10 @@ GLOBAL MODEL CONSTRAINTS (ALL VIEWS):
     - NO patterns, prints, or logos on clothing.
     - FABRIC: Linen, Cotton, or simple Knitwear.
     - COLORS: Neutral, Light tones (White, Beige, Light Grey) ONLY. Dark/Neon forbidden.
-    - STYLE: Minimalist.
+    - STYLE: ${wardrobeStyle}
 4. LIGHTING: Soft, even lighting, 5500K. No hard shadows on face.
-5. BACKGROUND: Pure White or softly blurred Light Grey (#F9F9F9).
-
-VISIBILITY PHYSICS & REALISM PROTOCOL:
-1. CONDITIONAL VISIBILITY: Product details (Tags/Logos) are NOT necessarily visible from all angles.
-   - If a detail is occluded by the head curvature or angle, DO NOT RENDER IT.
-   - DO NOT warp geometry to force a logo to be visible in Side/Back views.
-2. NO ARTISTIC INTERPRETATION (STRICT):
-   - You are a camera, not a designer. DO NOT invent details.
-   - DO NOT move tags to make them visible. If they are hidden, they remain hidden.
-3. GRAVITY: Brim must be PARALLEL to the ground.
-4. NATURAL FIT: Hat sits naturally on the head.
+5. BACKGROUND: ${scene}.
+${modelFallback}
 `;
 
             let specificAction = "";
@@ -139,121 +189,215 @@ FOCUS: Sharp profile. Highlight brim silhouette (flat or curved). Edge lines mus
                     specificAction = `
 ACTION: Rear View (180°).
 POSE: Back to camera.
-FOCUS: Show back of head and hat's rear design.
-CRITICAL DETAIL: If adjustment buckle/velcro exists, it MUST be visible and geometrically accurate. Show hair interaction naturally.`;
+FOCUS: Rear details of the hat.`;
                     break;
                 case 'model_lifestyle':
                     specificAction = `
-ACTION: Lifestyle / Natural Pose.
-POSE: Hand gently touching edge of brim (fingers relaxed, NOT covering details) OR Looking down/smiling.
-VIBE: Relaxed, "Holiday" or "Daily Wear".
-CONSTRAINT: Even in action, hat shape must NOT be distorted.`;
+ACTION: Lifestyle / Editorial Shot.
+POSE VARIATIONS (Randomly Select One):
+  - Hand Touching Brim (手扶帽檐): Natural interaction.
+  - Looking Down & Smiling (低头微笑): Candid, soft expression.
+  - Looking Back (回头侧望): Over the shoulder view.
+  - Sitting Pose (坐姿造型): Relaxed posture.
+LIGHTING: Soft, even, diffused lighting (均匀柔光). No harsh shadows.
+FLOW: Posture and eye contact must be natural and fluid.
+FOCUS: Highlight the brim lines (突出帽檐线条) and the fit in different wearing states (不同佩戴状态的效果).`;
                     break;
             }
 
-            return `${globalModelConstraints}
+            prompt = `${globalModelConstraints}
 TASK: Composite the Reference Product onto a ${modelDesc}.
 SCENE: ${scene}.
 ${specificAction}
 IMPORTANT: The product appearance (texture/shape) must remain IDENTICAL to the reference. Do not wrap or warp the product unrealistically. ${base}`;
+            break;
 
         default:
-            return `${context} Projection of product. ${base}`;
+            prompt = `${context} Projection of product. ${base}`;
+            break;
     }
+
+    // Append Manual Override if present (Highest Priority)
+    if (config.customPrompt) {
+        prompt += `
+USER OVERRIDE INSTRUCTION: ${config.customPrompt}`;
+    }
+
+    return prompt;
 };
 
-// Single API Call Wrapper (Supports Multiple Reference Images)
-const generateSingleImage = async (referenceImagesBase64, prompt, apiKey, apiUrl) => {
-    // Check Config
-    if (!apiKey || !apiUrl || apiUrl.includes("nanobanana.com")) {
-        throw new Error("MockMode");
-    }
+// --- NanoBanana API Adapter (Async Polling) ---
 
-    const isGoogle = apiUrl.includes('googleapis.com');
-    if (isGoogle && !apiUrl.includes("key=") && apiKey) {
-        apiUrl += `?key=${apiKey}`;
-    }
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const headers = { 'Content-Type': 'application/json' };
-    let payload = {};
+const pollTaskStatus = async (taskId, apiKey) => {
+    const pollUrl = `https://api.nanobananaapi.ai/api/v1/nanobanana/record-info?taskId=${taskId}`;
+    const maxAttempts = 60; // 3 minutes timeout (60 * 3s)
+    let attempts = 0;
 
-    if (isGoogle) {
-        // Construct Gemini Payload with MULTIPLE images and LABEL TEXTS
-        // We interleave text and images: [Text: "Front View"], [Image], [Text: "Back View"], [Image]
-
-        let parts = [
-            { text: prompt + " Ensure consistency with all provided reference images." }
-        ];
-
-        referenceImagesBase64.forEach(img => {
-            // Add label metadata if not 'general'
-            // Map internal label keys to human readable prompt text
-            const labelMap = {
-                'front': 'Front View (0-degree)',
-                'angle_left': 'Left Front Angle View (45-degree)',
-                'angle_right': 'Right Front Angle View (45-degree)',
-                'side_left': 'Left Side_Profile View (90-degree)',
-                'side_right': 'Right Side_Profile View (90-degree)',
-                'back': 'Back View (180-degree)',
-                'top_overhead': 'Top Down View (Flat Lay)',
-                'inside': 'Inside/Interior View',
-                'detail': 'Detail Shot',
-                'general': 'Reference View'
-            };
-
-            const labelText = labelMap[img.label] || 'Reference View';
-
-            parts.push({ text: `Reference Image [${labelText}]:` });
-            parts.push({
-                inline_data: { mime_type: img.mimeType, data: img.data }
+    while (attempts < maxAttempts) {
+        try {
+            const response = await fetch(pollUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
             });
-        });
 
-        payload = {
-            contents: [{ parts: parts }]
-        };
-    } else {
-        // Fallback for OpenAI/Generic (First image only)
-        headers['Authorization'] = `Bearer ${apiKey}`;
-        payload = {
-            prompt,
-            init_image: referenceImagesBase64[0].fullDataUrl,
-            steps: 30
-        };
+            if (!response.ok) throw new Error(`Polling Error: ${response.status}`);
+
+            const data = await response.json();
+            // Status Values: 0: GENERATING, 1: SUCCESS, 2: CREATE_FAILED, 3: GENERATE_FAILED
+            const status = data.data?.status ?? data.status;
+
+            console.log(`[NanoBanana] Polling Task ${taskId}: Status ${status}`);
+
+            if (status === 1) {
+                // SUCCESS
+                return data.data?.resultImageUrl || data.resultImageUrl;
+            } else if (status === 2 || status === 3) {
+                // FAILED
+                throw new Error(`Task Failed with Status ${status}: ${data.msg || 'Unknown Error'}`);
+            }
+
+            // Still GENERATING (0) - Wait and retry
+            await sleep(3000);
+            attempts++;
+        } catch (error) {
+            console.error("Polling Exception:", error);
+            throw error;
+        }
     }
+    throw new Error("Task Timed Out");
+};
 
-    const response = await fetch(apiUrl, {
-        method: 'POST', headers, body: JSON.stringify(payload)
-    });
+const generateSingleImageNanoBanana = async (referenceImages, prompt, apiKey, apiUrl) => {
+    let imageUrls = [];
 
-    if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[API ERROR] Status: ${response.status}`, errText);
-        throw new Error(`API Error ${response.status}: ${errText}`);
-    }
+    // Note: 'type' parameter is NOT supported in generate-pro.
+    // 'imageUrls' is the only trigger for Image-to-Image.
 
-    const data = await response.json();
-
-    // Parse Logic (Same as before)
-    if (data.candidates?.[0]?.content?.parts) {
-        const parts = data.candidates[0].content.parts;
-        const imagePart = parts.find(p => p.inline_data || p.inlineData);
-        if (imagePart) {
-            const inlineData = imagePart.inline_data || imagePart.inlineData;
-            return `data:${inlineData.mime_type || inlineData.mimeType || 'image/png'};base64,${inlineData.data}`;
+    if (referenceImages && referenceImages.length > 0) {
+        const refImg = referenceImages[0];
+        if (refImg.fullDataUrl) {
+            imageUrls = [refImg.fullDataUrl];
         }
     }
 
-    if (data.predictions?.[0]) return `data:image/png;base64,${data.predictions[0]}`;
-    if (data.output?.[0]) return data.output[0];
-    if (data.images?.[0]?.url) return data.images[0].url;
+    const payload = {
+        prompt: prompt,
+        imageUrls: imageUrls,
+        resolution: "2K",       // Per spec: 1K, 2K, 4K
+        aspectRatio: "1:1",     // Per spec: 1:1, 3:4, 4:3, etc.
+        callBackUrl: "https://placeholder-callback.com" // Required field per spec description
+    };
 
-    throw new Error("Unknown Response Format");
+    console.log("[NanoBanana] Submitting Task (Pro):", JSON.stringify(payload, null, 2));
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok || responseData.code !== 200) {
+        throw new Error(`Submission Failed: ${responseData.msg || responseData.message || JSON.stringify(responseData)}`);
+    }
+
+    const taskId = responseData.data?.taskId;
+    if (!taskId) throw new Error("No Task ID returned from API");
+
+    console.log(`[NanoBanana] Task Submitted. ID: ${taskId}`);
+    return await pollTaskStatus(taskId, apiKey);
+};
+
+// --- Google Gemini API Adapter (Sync Call) ---
+const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl) => {
+
+    // Ensure Key is passed
+    if (!apiUrl.includes("key=") && apiKey) {
+        apiUrl += `?key=${apiKey}`;
+    }
+
+    // Construct Payload
+    // Convert all images to Inline Data for Gemini
+    // Note: 'referenceImages' here are the processed objects which should have mimeType/data split or fullDataUrl
+    // The upstream 'processImg' returns: { data, mimeType, fullDataUrl, label }
+
+    // Safety check for data format
+    const inlineDataParts = referenceImages.map(img => {
+        return {
+            inline_data: {
+                mime_type: img.mimeType || 'image/jpeg',
+                data: img.data // Base64 string without header
+            }
+        };
+    });
+
+    // Content Part
+    const parts = [
+        { text: prompt },
+        ...inlineDataParts
+    ];
+
+    const payload = {
+        contents: [{ parts: parts }],
+        generationConfig: {
+            temperature: 0.4,
+            topK: 40,
+            topP: 0.9,
+            maxOutputTokens: 2048,
+        }
+    };
+
+    console.log(`[Gemini] Sending Request to ${apiUrl}...`);
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Gemini Error ${response.status}: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    console.log("[Gemini Raw]", JSON.stringify(data, null, 2)); // DEBUG
+
+    // Parse Result
+    const candidates = data.candidates;
+    if (candidates && candidates.length > 0) {
+        const parts = candidates[0].content.parts;
+        // Look for image blob (Support both camelCase and snake_case)
+        const imagePart = parts.find(p => p.inline_data || p.inlineData);
+        if (imagePart) {
+            const blob = imagePart.inline_data || imagePart.inlineData;
+            return `data:${blob.mime_type || blob.mimeType};base64,${blob.data}`;
+        }
+    }
+
+    throw new Error("No image data found in Gemini response");
+};
+
+// --- Main Dispatcher ---
+const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl) => {
+    // Determine provider based on URL or Config
+    if (apiUrl.includes("nanobanana")) {
+        return await generateSingleImageNanoBanana(referenceImages, prompt, apiKey, apiUrl);
+    } else {
+        return await generateSingleImageGemini(referenceImages, prompt, apiKey, apiUrl);
+    }
 };
 
 export const generateImages = async (imageObjects, config, onImageGenerated, onStatus) => {
     const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
-    const apiUrl = import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('{gemini-3-pro-image-preview}', 'gemini-1.5-flash') : '';
+    const apiUrl = import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('{gemini-3-pro-image-preview}', 'gemini-2.5-flash-image') : '';
 
     const updateStatus = (msg) => {
         if (onStatus) onStatus(msg);
@@ -309,63 +453,29 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
         tasks = [...tasks, ...selectedModels];
     }
 
+    // --- ProductAI 2.0 Workflow: Decoupled Parallel Generation (No Anchor Injection) ---
+    // Modification: All tasks run in parallel using ORIGINAL source images to prevent error propagation.
+
     const totalTasks = tasks.length;
     let completedTasks = 0;
-
-    // --- ProductAI 2.0 Workflow: Serial Anchor Injection ---
-    const anchorTaskKey = 'front';
-    const anchorTask = tasks.find(t => t.key === anchorTaskKey);
-    const followUpTasks = tasks.filter(t => t.key !== anchorTaskKey);
-
     let generatedResults = { images: {}, payload: null };
-    let anchorBase64Obj = null;
 
-    // 2. Execute Anchor Task (Front)
-    if (anchorTask) {
-        updateStatus("Phase 1: Generating Anchor View (Ground Truth)...");
-        try {
-            const prompt = getViewPrompt(anchorTask.type, config);
-            const url = await generateSingleImage(processedImages, prompt, apiKey, apiUrl);
-
-            generatedResults.images[anchorTask.key] = { url, label: anchorTask.label };
-
-            // Stream Update
-            completedTasks++;
-            if (onImageGenerated) onImageGenerated(anchorTask.key, url, completedTasks, totalTasks);
-
-            // Convert Result URL to Base64 for Injection
-            updateStatus("Processing Anchor for Injection...");
-            const res = await fetch(url);
-            const blob = await res.blob();
-            anchorBase64Obj = await fileToBase64(blob);
-            anchorBase64Obj.label = "GENERATED ANCHOR FRONT";
-
-        } catch (err) {
-            console.error("Anchor Task Failed:", err);
-            updateStatus("Anchor Generation Failed. Proceeding with raw references...");
-        }
-    }
-
-    // 3. Inject Anchor into Context
-    let currentContextImages = [...processedImages];
-    if (anchorBase64Obj) {
-        currentContextImages.push(anchorBase64Obj);
-        updateStatus("Anchor Injected. Starting Parallel Ensuing...");
-    }
-
-    // 4. Execute Follow-up Tasks (Parallel but Staggered)
-    if (followUpTasks.length > 0) {
-        updateStatus(`Phase 2: Generating ${followUpTasks.length} Variations...`);
+    if (totalTasks > 0) {
+        updateStatus(`Starting Parallel Optimization for ${totalTasks} Views...`);
 
         // Use map then Promise.all, but inject a DELAY based on index
-        const results = await Promise.all(followUpTasks.map(async (task, index) => {
+        const results = await Promise.all(tasks.map(async (task, index) => {
             // ARTIFICIAL STAGGER: Wait 1.5s * index to force sequential-ish feeling
             // This prevents "Boom, all done" and ensures users see them pop in 1 by 1
             await delay(index * 1500);
 
             try {
-                const prompt = getViewPrompt(task.type, config);
-                const url = await generateSingleImage(currentContextImages, prompt, apiKey, apiUrl);
+                // Feature: Smart Fallback. Pass available labels to Prompt Engine.
+                const availableLabels = processedImages.map(img => img.label);
+                const prompt = getViewPrompt(task.type, config, availableLabels);
+
+                // CRITICAL CHANGE: Always use 'processedImages' (Originals), NEVER 'currentContextImages' (Injected)
+                const url = await generateSingleImage(processedImages, prompt, apiKey, apiUrl);
 
                 // Stream Update
                 completedTasks++;

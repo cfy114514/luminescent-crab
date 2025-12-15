@@ -201,13 +201,50 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 <label className="text-sm text-slate-400 flex items-center gap-2">
                     <MapPin className="w-4 h-4" /> 场景 / 背景
                 </label>
-                <input
-                    type="text"
-                    value={config.scene}
-                    onChange={(e) => handleChange('scene', e.target.value)}
-                    placeholder="例如：现代客厅，阳光沙滩..."
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                />
+                <div className="relative">
+                    <input
+                        type="text"
+                        list="scene-options"
+                        value={config.scene || ''}
+                        onChange={(e) => handleChange('scene', e.target.value)}
+                        placeholder="选择预设或手动输入 (Select or Type)..."
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                    />
+                    <datalist id="scene-options">
+                        <option value="Minimalist Concrete Studio (极简水泥风)" />
+                        <option value="Modern Living Room (现代客厅)" />
+                        <option value="Sunny Beach (阳光沙滩)" />
+                        <option value="Urban Street (城市街头)" />
+                        <option value="Lush Park (自然公园)" />
+                        <option value="Luxury Boutique (高级精品店)" />
+                        <option value="Pure White Background (纯白背景)" />
+                    </datalist>
+                </div>
+            </div>
+
+            {/* Target Color (Palette) */}
+            <div className="space-y-2">
+                <label className="text-sm text-slate-400 flex items-center gap-2">
+                    <Palette className="w-4 h-4" /> 产品色调 (Target Color)
+                </label>
+                <div className="flex gap-3">
+                    <div className="relative w-12 h-10 flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 transition-colors">
+                        <input
+                            type="color"
+                            value={config.targetColor || '#ffffff'}
+                            onChange={(e) => handleChange('targetColor', e.target.value)}
+                            className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer p-0 border-0"
+                        />
+                    </div>
+                    <input
+                        type="text"
+                        value={config.targetColor || ''}
+                        onChange={(e) => handleChange('targetColor', e.target.value)}
+                        placeholder="#FFFFFF or Red"
+                        className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-mono uppercase"
+                    />
+                </div>
+                <p className="text-[10px] text-slate-500">* 指令AI将产品材质重新染色为指定颜色 (保持原有纹理)</p>
             </div>
 
             {/* Clothing */}
@@ -217,11 +254,20 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 </label>
                 <input
                     type="text"
-                    value={config.clothing}
+                    list="clothing-options"
+                    value={config.clothing || ''}
                     onChange={(e) => handleChange('clothing', e.target.value)}
-                    placeholder="例如：休闲牛仔，正式西装..."
+                    placeholder="选择预设或手动输入..."
                     className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
                 />
+                <datalist id="clothing-options">
+                    <option value="Casual Minimalist (休闲极简)" />
+                    <option value="Smart Business (商务通勤)" />
+                    <option value="Summer Vacation (度假风)" />
+                    <option value="Streetwear (街头潮流)" />
+                    <option value="Sportswear (运动风)" />
+                    <option value="Elegant Evening (优雅晚装)" />
+                </datalist>
             </div>
 
             {/* Hair Color */}
@@ -231,10 +277,34 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 </label>
                 <input
                     type="text"
-                    value={config.hairColor}
+                    list="hair-options"
+                    value={config.hairColor || ''}
                     onChange={(e) => handleChange('hairColor', e.target.value)}
-                    placeholder="例如：深棕色，金发..."
+                    placeholder="选择预设或手动输入..."
                     className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                />
+                <datalist id="hair-options">
+                    <option value="Dark Brown (深棕色)" />
+                    <option value="Black (黑色)" />
+                    <option value="Blonde (金发)" />
+                    <option value="Redhead (红发)" />
+                    <option value="Grey/Silver (银灰色)" />
+                    <option value="Pink Dyed (粉色染发)" />
+                    <option value="Blue Dyed (蓝色染发)" />
+                </datalist>
+            </div>
+
+            {/* Manual Prompt Override */}
+            <div className="space-y-2 pt-4 border-t border-slate-700/50">
+                <label className="text-sm text-purple-400 flex items-center gap-2 font-medium">
+                    <Sparkles className="w-4 h-4" /> 附加提示词 (Custom Prompt)
+                </label>
+                <textarea
+                    value={config.customPrompt || ''}
+                    onChange={(e) => handleChange('customPrompt', e.target.value)}
+                    placeholder="在此输入额外的 Prompt 指令 (将在最后拼接到提示词中)... 例如: 'Add intense rim lighting', 'Make it look like a sketch'"
+                    rows={3}
+                    className="w-full bg-slate-900/50 border border-purple-500/30 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-purple-500/50 outline-none transition-all resize-y text-xs font-mono"
                 />
             </div>
         </div>
