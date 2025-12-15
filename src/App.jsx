@@ -127,8 +127,8 @@ function App() {
       const data = await generateImages(
         referenceImages,
         config,
-        (key, url, current, total) => {
-          setResults(prev => ({ ...prev, [key]: { url, label: key } }));
+        (key, resultData, current, total) => {
+          setResults(prev => ({ ...prev, [key]: resultData }));
           setProgress({ current, total });
         },
         (status) => {

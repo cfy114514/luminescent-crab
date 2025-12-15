@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Maximize2, X, Image as ImageIcon, Package } from 'lucide-react';
+import { Download, Maximize2, X, Image as ImageIcon, Package, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -72,46 +72,78 @@ const ResultGallery = ({ results }) => {
                     </button>
                 </div>
 
-                {images.map((item, index) => (
-                    <motion.div
-                        key={item.label}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className={`
+                {images.map((item, index) => {
+                    // DEBUG: Check if QC data is present
+                    console.log(`[Gallery] Image ${index}:`, item.label, "QC:", item.qc);
+                    return (
+                        <motion.div
+                            key={item.label}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                            className={`
               relative group rounded-xl overflow-hidden glass-panel border border-white/5
               ${index === 0 ? 'md:col-span-2 md:aspect-[2/1]' : 'aspect-square'}
             `}
-                    >
-                        <img
-                            src={item.url}
-                            alt={item.label}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
+                        >
+                            {/* QC Badge */}
+                            {item.qc && (
+                                <div className={`absolute top-3 left-3 z-20 px-3 py-1.5 rounded-lg backdrop-blur-md border ${item.qc.score >= 8
+                                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-100'
+                                    : 'bg-rose-500/20 border-rose-500/50 text-rose-100'
+                                    } flex items-center gap-2 shadow-lg cursor-help transition-all duration-300 hover:scale-105`}>
+                                    {item.qc.score >= 8 ? <ShieldCheck className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
+                                    <span className="text-xs font-bold font-mono">QC:{item.qc.score}</span>
 
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between">
-                                <span className="text-white font-medium">{item.label}</span>
-                                <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={() => handleDownload(item.url, item.label)}
-                                        className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
-                                        title="下载原图"
-                                    >
-                                        <Download className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => setSelectedImage(item)}
-                                        className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
-                                        title="查看大图"
-                                    >
-                                        <Maximize2 className="w-4 h-4" />
-                                    </button>
+                                    {/* Tooltip */}
+                                    <div className="absolute top-full left-0 mt-2 w-64 p-4 bg-slate-950/95 border border-white/10 rounded-xl text-xs text-left shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none backdrop-blur-xl z-50">
+                                        <div className={`font-bold text-sm mb-2 pb-2 border-b border-white/10 ${item.qc.score >= 8 ? "text-emerald-400" : "text-rose-400"
+                                            }`}>
+                                            {item.qc.score >= 8 ? "✅ AI Supervisor Passed" : "⚠️ AI Review Flagged"}
+                                        </div>
+                                        <div className="text-slate-300 leading-relaxed mb-2">
+                                            <span className="text-slate-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Reasoning</span>
+                                            {item.qc.reason}
+                                        </div>
+                                        {item.qc.retry_suggestion && (
+                                            <div className="bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg mt-2">
+                                                <span className="text-amber-500 font-bold uppercase text-[10px] tracking-wider block mb-1">Auto-Fix Suggestion</span>
+                                                <span className="text-amber-200">{item.qc.retry_suggestion}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <img
+                                src={item.url}
+                                alt={item.label}
+                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            />
+
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between">
+                                    <span className="text-white font-medium">{item.label}</span>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => handleDownload(item.url, item.label)}
+                                            className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+                                            title="下载原图"
+                                        >
+                                            <Download className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => setSelectedImage(item)}
+                                            className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-colors"
+                                            title="查看大图"
+                                        >
+                                            <Maximize2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </motion.div>
-                ))}
+                        </motion.div>
+                    ))}
             </div>
 
             {/* Lightbox / Zoom Modal */}

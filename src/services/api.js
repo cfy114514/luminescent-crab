@@ -472,16 +472,67 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
             try {
                 // Feature: Smart Fallback. Pass available labels to Prompt Engine.
                 const availableLabels = processedImages.map(img => img.label);
-                const prompt = getViewPrompt(task.type, config, availableLabels);
 
-                // CRITICAL CHANGE: Always use 'processedImages' (Originals), NEVER 'currentContextImages' (Injected)
-                const url = await generateSingleImage(processedImages, prompt, apiKey, apiUrl);
+                let attempt = 0;
+                const maxRetries = 2; // Retry 0, 1, 2 (Total 3 attempts max if bad)
+                let currentPrompt = getViewPrompt(task.type, config, availableLabels);
+                let finalUrl = "";
+                let finalAssessment = null;
+                let passed = false;
+
+                // --- RETRY LOOP ---
+                while (attempt <= maxRetries && !passed) {
+                    if (attempt > 0) updateStatus(`Task ${task.label}: Retrying (Attempt ${attempt + 1})...`);
+
+                    // 1. Generate
+                    const url = await generateSingleImage(processedImages, currentPrompt, apiKey, apiUrl);
+                    finalUrl = url;
+
+                    // 2. Assess (AI Supervisor)
+                    // Only assess if we have a valid image and not just an error
+                    if (url) {
+                        try {
+                            const refImgForQC = processedImages[0]; // Use primary ref for QC
+                            const assessment = await assessImageQuality(url, currentPrompt, refImgForQC, apiKey, apiUrl);
+                            finalAssessment = assessment;
+
+                            if (assessment.score >= 8) {
+                                passed = true;
+                                console.log(`[Loop] Task ${task.key} PASSED with Score ${assessment.score}`);
+                            } else {
+                                console.warn(`[Loop] Task ${task.key} FAILED QC (Score ${assessment.score}). Reason: ${assessment.reason}`);
+                                // Prepare for next retry
+                                if (attempt < maxRetries) {
+                                    // Append suggestion to prompt
+                                    currentPrompt += `\n\nPREVIOUS ATTEMPT FAILED QC. CRITICISM: ${assessment.reason}. FIX: ${assessment.retry_suggestion}. IMPROVE QUALITY!`;
+                                }
+                            }
+                        } catch (qcError) {
+                            console.error(`[Loop] QC Crashed, treating as PASS to avoid stalling.`, qcError);
+                            passed = true; // Fail open
+                        }
+                    }
+
+                    if (!passed) attempt++;
+                }
+                // ------------------
 
                 // Stream Update
                 completedTasks++;
-                if (onImageGenerated) onImageGenerated(task.key, url, completedTasks, totalTasks);
 
-                return { key: task.key, data: { url, label: task.label } };
+                const resultData = {
+                    url: finalUrl,
+                    label: task.label,
+                    qc: finalAssessment
+                };
+
+                if (onImageGenerated) onImageGenerated(task.key, resultData, completedTasks, totalTasks);
+
+                // Return result with QC Metadata
+                return {
+                    key: task.key,
+                    data: resultData
+                };
             } catch (err) {
                 console.error(`Task ${task.key} failed:`, err);
                 return { key: task.key, error: err.message };
@@ -608,4 +659,145 @@ CRITICAL ANTI-HALLUCINATION RULES:
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Analysis failed to produce text.";
 
     return resultText.trim();
+};
+
+/**
+ * AI Supervisor: Assess Image Quality & Compliance
+ * Uses Gemini 2.0 Flash to score the image (0-10) and check for specific defects.
+ */
+const assessImageQuality = async (generatedImageUrl, originalPrompt, referenceImageObj, apiKey, apiUrl) => {
+    // Ensure we use Gemini 2.0 Flash for vision capabilities
+    // Note: If original view implementation overrides URL, we assume apiUrl here is the base Gemini URL
+    // Ensure we use Gemini 2.0 Flash for vision capabilities
+    let reviewApiUrl = "";
+
+    if (apiUrl && apiUrl.includes("googleapis.com")) {
+        // Force swap to Gemini 2.0 Flash Experimental for Supervisor duties
+        reviewApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
+    } else if (import.meta.env.VITE_NANOBANANA_API_URL && import.meta.env.VITE_NANOBANANA_API_URL.includes("gemini-2.0-flash-exp")) {
+        reviewApiUrl = import.meta.env.VITE_NANOBANANA_API_URL;
+    } else {
+        // Fallback
+        reviewApiUrl = apiUrl;
+    }
+
+    // Fallback if URL is empty or invalid
+    if (!reviewApiUrl) {
+        console.warn("[Supervisor] No Review API URL found. Skipping QC.");
+        return { score: 10, reason: "Skipped (No API)", retry_suggestion: "" };
+    }
+
+    console.log(`[Supervisor] Review URL: ${reviewApiUrl} [v2.0]`);
+
+    if (!reviewApiUrl.includes("key=") && apiKey) {
+        reviewApiUrl += `?key=${apiKey}`;
+    }
+
+    // Prepare content parts
+    // 1. System Instruction
+    // 2. Reference Image (Ground Truth)
+    // 3. Generated Image (Candidate)
+
+    // Helper: Fetch generated image and convert to Base64 (since Gemini needs inline or upload, passing URL might not work if it's protected or Gemini can't access it easily without tools. 
+    // Wait, if result is a URL from NanoBanana, we might need to fetch it first.
+    let generatedBase64 = "";
+    try {
+        if (generatedImageUrl.startsWith("data:")) {
+            generatedBase64 = generatedImageUrl.split(',')[1];
+        } else {
+            const resp = await fetch(generatedImageUrl);
+            const blob = await resp.blob();
+            generatedBase64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+        }
+    } catch (e) {
+        console.error("[Supervisor] Failed to download generated image for review:", e);
+        return { score: 5, reason: "Fetch Error", retry_suggestion: "" };
+    }
+
+    // Ref Image Selection & Conversion
+    let refMimeType = "";
+    let refData = "";
+
+    try {
+        // CASE 1: processedImages object (already has base64 data)
+        if (referenceImageObj.data && referenceImageObj.mimeType) {
+            refData = referenceImageObj.data;
+            refMimeType = referenceImageObj.mimeType;
+        }
+        // CASE 2: Raw File Object or Object wrapper
+        else {
+            const fileToRead = referenceImageObj.file instanceof Blob ? referenceImageObj.file :
+                (referenceImageObj instanceof Blob ? referenceImageObj : null);
+
+            if (fileToRead) {
+                const base64Info = await fileToBase64(fileToRead);
+                refData = base64Info.data;
+                refMimeType = base64Info.mimeType;
+            } else {
+                throw new Error("Invalid Reference Image Object: No file or data found.");
+            }
+        }
+    } catch (err) {
+        console.error("[Supervisor] Ref Image Error:", err);
+        return { score: 10, reason: "Ref Image Error (Bypassed)", retry_suggestion: "" };
+    }
+
+    const promptText = `
+SYSTEM ROLE: Senior Product Quality Control Specialist (AI Supervisor).
+TASK: Evaluate the "Candidate Image" against the "Reference Image" and "Production Rules".
+
+STRICT RULES (The "Straw Hat Spec"):
+1. **Background**: MUST be Pure White (RGB 255,255,255) / Clean Studio.
+2. **Topology**: The shape, proportions, and structure must match the Reference.
+3. **Materials**: Texture/Weave must look identical to the Reference.
+4. **No Hallucinations**: No extra straps, bands, or buckles unless they exist in Reference.
+5. **No Defects**: No distorted geometry, melted mesh, or broken lines.
+
+SCORING (0-10):
+- 10: Perfect. Indistinguishable from ground truth.
+- 8-9: Excellent. Minor lighting diffs allowed. PASS.
+- 6-7: Acceptable but flawed. Slight texture blur or minor asymmetry. RETRY if possible.
+- < 6: FAILURE. Wrong shape, wrong material, bad artifacts, or extra items hallucinated.
+
+OUTPUT JSON ONLY:
+{
+  "score": number, 
+  "reason": "Short explanation of defects or why it passed.",
+  "retry_suggestion": "Specific instruction to fix the main defect (e.g. 'Remove extra band', 'Sharped weave'). If Pass, leave empty."
+}
+`;
+
+    const payload = {
+        contents: [{
+            parts: [
+                { text: promptText },
+                { text: "REFERENCE IMAGE (GROUND TRUTH):" },
+                { inline_data: { mime_type: refMimeType, data: refData } },
+                { text: "CANDIDATE IMAGE (TO EVALUATE):" },
+                { inline_data: { mime_type: "image/jpeg", data: generatedBase64 } }
+            ]
+        }],
+        generationConfig: { response_mime_type: "application/json" }
+    };
+
+    try {
+        const response = await fetch(reviewApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("No JSON returned");
+
+        console.log(`[Supervisor] Assessment:`, text);
+        return JSON.parse(text);
+    } catch (e) {
+        console.error("[Supervisor] Analysis Failed", e);
+        return { score: 10, reason: "Supervisor Error (Bypassed)", retry_suggestion: "" };
+    }
 };
