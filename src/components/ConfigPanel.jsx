@@ -14,6 +14,24 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 参数设置
             </h3>
 
+            {/* Model Selection */}
+            <div className="space-y-2 pb-4 border-b border-slate-700/50">
+                <label className="text-sm text-green-400 flex items-center gap-2 font-medium">
+                    <Sparkles className="w-4 h-4" /> 生成模型 (AI Model)
+                </label>
+                <select
+                    value={config.model || 'gemini-2.5-flash-image'}
+                    onChange={(e) => handleChange('model', e.target.value)}
+                    className="w-full bg-slate-900/50 border border-green-500/30 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-green-500/50 outline-none transition-all font-mono"
+                >
+                    <option value="gemini-2.5-flash-image">Gemini 2.5 Flash (Standard - Fast)</option>
+                    <option value="gemini-3-pro-image-preview">Gemini 3.0 Pro (Preview - High Quality)</option>
+                </select>
+                <p className="text-xs text-slate-500">
+                    * 3.0 Pro 处于预览阶段，可能生成较慢，但细节更丰富。
+                </p>
+            </div>
+
             {/* Feature Description (Moved to Top) */}
             <div className="space-y-2">
                 <div className="flex items-center justify-between">

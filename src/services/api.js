@@ -23,7 +23,12 @@ const fileToBase64 = (file) => {
 const getViewPrompt = (viewType, config, availableLabels = []) => {
     // Spec Requirement: Pure White Background (to be post-processed to #F9F9F9), Studio Lighting 5500K.
     // Added "NO shadows, NO filters" to base prompt.
-    const base = "White background, Studio 5500K, 8k resolution. NO dramatic shadows, NO artistic filters, NO post-processing styles.";
+    const base = `
+White background, Studio 5500K, 8k resolution. NO dramatic shadows, NO artistic filters, NO post-processing styles.
+GLOBAL NEGATIVE PROMPT (FORBIDDEN):
+- **NO HANG TAGS / PRICE LABELS / SECURITY TAGS**: Remove all retail tags hanging from the hat. The product must look like a clean studio sample.
+- NO MANNEQUIN HEAD (unless specified in model view).
+- NO WATERMARKS.`;
 
     // Truth Enforcing Context (User Defined Strict Mode)
     let context = `
@@ -122,13 +127,14 @@ CONSTRAINT:
                 "MISSING DETAIL REFERENCE: Use the highest resolution 'Front' or 'General' view. Do NOT invent micro-textures. If you can't see the weave, render smooth material.";
 
             prompt = `${context} 
-ACTION: Macro Textural Shot (Micro-Photography).
+ACTION: Extreme Macro Textural Shot (Micro-Photography).
 LOGIC: ${detailInstruction}
-CAMERA: 100mm Macro Lens. Aperture f/8 for sharp texture depth. Lighting angle 45° to reveal surface relief.
+CAMERA: 100mm Macro Lens. Aperture f/8. Focus distance 10cm.
 CONSTRAINT: 
-- SINGLE FOCUS PRINCIPLE: It is IMPOSSIBLE to present all details in a single shot. Do not try to cram everything in. Focus intensely on ONE dominant feature and blur the periphery slightly if needed.
-- TEXTURE MATCH: The weave/grain must be identical to the zoom-in of the reference.
-- NO HALLUCINATION: Do not invent "fancy" textures. If it's canvas, render canvas.`;
+- SINGLE FOCUS PRINCIPLE: IMPOSSIBLE to see the whole hat. Show ONLY a 5cm x 5cm patch of fabric.
+- MAGNIFICATION: Extreme Close-up. I want to see the thread weave.
+- NO LOGOS/BRANDING: Do NOT show the logo. This is a material sample shot. Showing the logo will ruin the texture focus.
+- TEXTURE MATCH: The weave/grain must be identical to the zoom-in of the reference.`;
             break;
 
         case 'model_front':
@@ -317,7 +323,7 @@ const generateSingleImageNanoBanana = async (referenceImages, prompt, apiKey, ap
 };
 
 // --- Google Gemini API Adapter (Sync Call) ---
-const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl) => {
+const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null) => {
 
     // Ensure Key is passed
     if (!apiUrl.includes("key=") && apiKey) {
@@ -326,15 +332,11 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
 
     // Construct Payload
     // Convert all images to Inline Data for Gemini
-    // Note: 'referenceImages' here are the processed objects which should have mimeType/data split or fullDataUrl
-    // The upstream 'processImg' returns: { data, mimeType, fullDataUrl, label }
-
-    // Safety check for data format
     const inlineDataParts = referenceImages.map(img => {
         return {
             inline_data: {
                 mime_type: img.mimeType || 'image/jpeg',
-                data: img.data // Base64 string without header
+                data: img.data
             }
         };
     });
@@ -344,6 +346,21 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
         { text: prompt },
         ...inlineDataParts
     ];
+
+    // Add Input Image for Refinement (if available)
+    if (img2imgInput) {
+        // img2imgInput is "data:image/jpeg;base64,....."
+        const base64Data = img2imgInput.split(',')[1];
+        const mimeType = img2imgInput.split(';')[0].split(':')[1];
+
+        parts.push({ text: "INPUT IMAGE TO REFINE (PREVIOUS ATTEMPT):" });
+        parts.push({
+            inline_data: {
+                mime_type: mimeType,
+                data: base64Data
+            }
+        });
+    }
 
     const payload = {
         contents: [{ parts: parts }],
@@ -355,7 +372,7 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
         }
     };
 
-    console.log(`[Gemini] Sending Request to ${apiUrl}...`);
+    console.log(`[Gemini] Sending Request to ${apiUrl}... (Img2Img: ${!!img2imgInput})`);
 
     const response = await fetch(apiUrl, {
         method: 'POST',
@@ -368,13 +385,12 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
     }
 
     const data = await response.json();
-    console.log("[Gemini Raw]", JSON.stringify(data, null, 2)); // DEBUG
+    console.log(`[Gemini Raw]`, JSON.stringify(data, null, 2));
 
     // Parse Result
     const candidates = data.candidates;
     if (candidates && candidates.length > 0) {
         const parts = candidates[0].content.parts;
-        // Look for image blob (Support both camelCase and snake_case)
         const imagePart = parts.find(p => p.inline_data || p.inlineData);
         if (imagePart) {
             const blob = imagePart.inline_data || imagePart.inlineData;
@@ -386,18 +402,29 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
 };
 
 // --- Main Dispatcher ---
-const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl) => {
+const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null) => {
     // Determine provider based on URL or Config
     if (apiUrl.includes("nanobanana")) {
-        return await generateSingleImageNanoBanana(referenceImages, prompt, apiKey, apiUrl);
+        return await generateSingleImageNanoBanana(referenceImages, prompt, apiKey, apiUrl); // Note: NanoBanana adapter not updated, assuming direct usage
     } else {
-        return await generateSingleImageGemini(referenceImages, prompt, apiKey, apiUrl);
+        return await generateSingleImageGemini(referenceImages, prompt, apiKey, apiUrl, img2imgInput);
     }
 };
 
 export const generateImages = async (imageObjects, config, onImageGenerated, onStatus) => {
     const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
-    const apiUrl = import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('{gemini-3-pro-image-preview}', 'gemini-2.5-flash-image') : '';
+
+    // Dynamic URL Construction based on Config Model
+    let apiUrl = import.meta.env.VITE_NANOBANANA_API_URL || '';
+    if (config.model) {
+        // Regex to replace any existing model name "gemini-..." inside the URL
+        apiUrl = apiUrl.replace(/models\/[a-zA-Z0-9-.]+:/, `models/${config.model}:`);
+    } else {
+        // Fallback default logic if not specified
+        apiUrl = apiUrl.replace('{gemini-3-pro-image-preview}', 'gemini-2.5-flash-image');
+    }
+
+    console.log(`[API] Using Model: ${config.model || 'Default'} -> URL: ${apiUrl}`);
 
     const updateStatus = (msg) => {
         if (onStatus) onStatus(msg);
@@ -480,20 +507,20 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
                 let finalAssessment = null;
                 let passed = false;
 
+                let img2imgInput = null; // Store failed image if usable for repainting
+
                 // --- RETRY LOOP ---
                 while (attempt <= maxRetries && !passed) {
                     if (attempt > 0) updateStatus(`Task ${task.label}: Retrying (Attempt ${attempt + 1})...`);
 
-                    // 1. Generate
-                    const url = await generateSingleImage(processedImages, currentPrompt, apiKey, apiUrl);
+                    // 1. Generate (Pass previous failed image if available for Img2Img)
+                    const url = await generateSingleImage(processedImages, currentPrompt, apiKey, apiUrl, img2imgInput);
                     finalUrl = url;
 
-                    // 2. Assess (AI Supervisor)
-                    // Only assess if we have a valid image and not just an error
+                    // 2. Assess
                     if (url) {
                         try {
-                            const refImgForQC = processedImages[0]; // Use primary ref for QC
-                            const assessment = await assessImageQuality(url, currentPrompt, refImgForQC, apiKey, apiUrl);
+                            const assessment = await assessImageQuality(url, currentPrompt, processedImages, apiKey, apiUrl, task.label);
                             finalAssessment = assessment;
 
                             if (assessment.score >= 8) {
@@ -501,10 +528,36 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
                                 console.log(`[Loop] Task ${task.key} PASSED with Score ${assessment.score}`);
                             } else {
                                 console.warn(`[Loop] Task ${task.key} FAILED QC (Score ${assessment.score}). Reason: ${assessment.reason}`);
+
+                                // PRESERVE FAILED RESULT:
+                                // User wants to see ALL attempts. We assign a unique key to failed ones.
+                                const failKey = `${task.key}_fail_${attempt + 1}`;
+                                const failedResult = {
+                                    url: finalUrl,
+                                    label: `${task.label} (Fail #${attempt + 1})`,
+                                    qc: assessment
+                                };
+
+                                // Stream immediately
+                                if (onImageGenerated) onImageGenerated(failKey, failedResult, completedTasks, totalTasks);
+
+                                // Save to final results (so it's included in download)
+                                generatedResults.images[failKey] = failedResult;
+
                                 // Prepare for next retry
                                 if (attempt < maxRetries) {
-                                    // Append suggestion to prompt
-                                    currentPrompt += `\n\nPREVIOUS ATTEMPT FAILED QC. CRITICISM: ${assessment.reason}. FIX: ${assessment.retry_suggestion}. IMPROVE QUALITY!`;
+                                    // SMART RETRY STRATEGY:
+                                    if (assessment.error_type === "DETAIL") {
+                                        // Geometry is good, Texture/Detail is bad -> Use Img2Img
+                                        img2imgInput = finalUrl;
+                                        currentPrompt += `\n\nPREVIOUS ATTEMPT (ATTACHED) HAD GOOD GEOMETRY BUT DETAIL ERRORS. FIX: ${assessment.retry_suggestion}. KEEP THE POSE, FIX THE DETAILS!`;
+                                        console.log(`[Loop] Smart Retry: Using Img2Img for Detail Fix.`);
+                                    } else {
+                                        // Geometry Bad -> Full Regen
+                                        img2imgInput = null;
+                                        currentPrompt += `\n\nPREVIOUS ATTEMPT FAILED (BAD GEOMETRY). CRITICISM: ${assessment.reason}. RESTART AND FIX: ${assessment.retry_suggestion}.`;
+                                        console.log(`[Loop] Smart Retry: Full Clean Regen.`);
+                                    }
                                 }
                             }
                         } catch (qcError) {
@@ -664,42 +717,35 @@ CRITICAL ANTI-HALLUCINATION RULES:
 /**
  * AI Supervisor: Assess Image Quality & Compliance
  * Uses Gemini 2.0 Flash to score the image (0-10) and check for specific defects.
+ * Now includes View-Specific Logic (e.g., Back View must not show Front Logo).
+ * NOW SUPPORTS MULTI-REFERENCE (Array).
  */
-const assessImageQuality = async (generatedImageUrl, originalPrompt, referenceImageObj, apiKey, apiUrl) => {
-    // Ensure we use Gemini 2.0 Flash for vision capabilities
-    // Note: If original view implementation overrides URL, we assume apiUrl here is the base Gemini URL
+const assessImageQuality = async (generatedImageUrl, originalPrompt, referenceImageObjList, apiKey, apiUrl, viewName = "General") => {
     // Ensure we use Gemini 2.0 Flash for vision capabilities
     let reviewApiUrl = "";
 
     if (apiUrl && apiUrl.includes("googleapis.com")) {
-        // Force swap to Gemini 2.0 Flash Experimental for Supervisor duties
-        reviewApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
-    } else if (import.meta.env.VITE_NANOBANANA_API_URL && import.meta.env.VITE_NANOBANANA_API_URL.includes("gemini-2.0-flash-exp")) {
-        reviewApiUrl = import.meta.env.VITE_NANOBANANA_API_URL;
+        // User requested strict adherence to "gemini-2.5-flash"
+        reviewApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    } else if (import.meta.env.VITE_NANOBANANA_API_URL && import.meta.env.VITE_NANOBANANA_API_URL.includes("gemini")) {
+        // Update Proxy URL to target 2.5 Flash
+        reviewApiUrl = import.meta.env.VITE_NANOBANANA_API_URL.replace(/gemini-[\w.-]+-exp/, 'gemini-2.5-flash').replace('gemini-3-pro-image-preview', 'gemini-2.5-flash');
     } else {
-        // Fallback
         reviewApiUrl = apiUrl;
     }
 
-    // Fallback if URL is empty or invalid
     if (!reviewApiUrl) {
         console.warn("[Supervisor] No Review API URL found. Skipping QC.");
-        return { score: 10, reason: "Skipped (No API)", retry_suggestion: "" };
+        return { score: 10, reason: "Skipped (No API)", retry_suggestion: "", error_type: "NONE" };
     }
 
-    console.log(`[Supervisor] Review URL: ${reviewApiUrl} [v2.0]`);
+    console.log(`[Supervisor] Review URL: ${reviewApiUrl} [v2.5 Flash]`);
 
     if (!reviewApiUrl.includes("key=") && apiKey) {
         reviewApiUrl += `?key=${apiKey}`;
     }
 
-    // Prepare content parts
-    // 1. System Instruction
-    // 2. Reference Image (Ground Truth)
-    // 3. Generated Image (Candidate)
-
-    // Helper: Fetch generated image and convert to Base64 (since Gemini needs inline or upload, passing URL might not work if it's protected or Gemini can't access it easily without tools. 
-    // Wait, if result is a URL from NanoBanana, we might need to fetch it first.
+    // 1. Get Generated Image Base64
     let generatedBase64 = "";
     try {
         if (generatedImageUrl.startsWith("data:")) {
@@ -715,68 +761,104 @@ const assessImageQuality = async (generatedImageUrl, originalPrompt, referenceIm
         }
     } catch (e) {
         console.error("[Supervisor] Failed to download generated image for review:", e);
-        return { score: 5, reason: "Fetch Error", retry_suggestion: "" };
+        return { score: 5, reason: "Fetch Error", retry_suggestion: "", error_type: "NONE" };
     }
 
-    // Ref Image Selection & Conversion
-    let refMimeType = "";
-    let refData = "";
+    // 2. Prepare Reference Images (Support Array or Single)
+    const refList = Array.isArray(referenceImageObjList) ? referenceImageObjList : [referenceImageObjList];
+    const refParts = [];
 
-    try {
-        // CASE 1: processedImages object (already has base64 data)
-        if (referenceImageObj.data && referenceImageObj.mimeType) {
-            refData = referenceImageObj.data;
-            refMimeType = referenceImageObj.mimeType;
-        }
-        // CASE 2: Raw File Object or Object wrapper
-        else {
-            const fileToRead = referenceImageObj.file instanceof Blob ? referenceImageObj.file :
-                (referenceImageObj instanceof Blob ? referenceImageObj : null);
-
-            if (fileToRead) {
-                const base64Info = await fileToBase64(fileToRead);
-                refData = base64Info.data;
-                refMimeType = base64Info.mimeType;
+    for (const [index, refObj] of refList.entries()) {
+        let refMime = "";
+        let refB64 = "";
+        try {
+            if (refObj.data && refObj.mimeType) {
+                refB64 = refObj.data;
+                refMime = refObj.mimeType;
             } else {
-                throw new Error("Invalid Reference Image Object: No file or data found.");
+                const fileToRead = refObj.file instanceof Blob ? refObj.file : (refObj instanceof Blob ? refObj : null);
+                if (fileToRead) {
+                    const base64Info = await fileToBase64(fileToRead);
+                    refB64 = base64Info.data;
+                    refMime = base64Info.mimeType;
+                }
             }
+        } catch (e) { continue; }
+
+        if (refB64) {
+            refParts.push({ text: `REFERENCE IMAGE ${index + 1} (${refObj.label || 'Unknown Ref'}):` });
+            refParts.push({ inline_data: { mime_type: refMime, data: refB64 } });
         }
-    } catch (err) {
-        console.error("[Supervisor] Ref Image Error:", err);
-        return { score: 10, reason: "Ref Image Error (Bypassed)", retry_suggestion: "" };
     }
 
     const promptText = `
 SYSTEM ROLE: Senior Product Quality Control Specialist (AI Supervisor).
-TASK: Evaluate the "Candidate Image" against the "Reference Image" and "Production Rules".
+TASK: Evaluate the "Candidate Image" against the provided "Reference Images" given the REQUIRED VIEW: **${viewName.toUpperCase()}**.
+CONTEXT: The User wants "Smart Correction". If the generator added a "Decorative Knot" that isn't in the reference, you MUST flag it for removal.
 
-STRICT RULES (The "Straw Hat Spec"):
-1. **Background**: MUST be Pure White (RGB 255,255,255) / Clean Studio.
-2. **Topology**: The shape, proportions, and structure must match the Reference.
-3. **Materials**: Texture/Weave must look identical to the Reference.
-4. **No Hallucinations**: No extra straps, bands, or buckles unless they exist in Reference.
-5. **No Defects**: No distorted geometry, melted mesh, or broken lines.
+STRICT ANALYSIS STEPS:
+1. **Analyze Reference**: Look at the Reference Images. Identify key features.
+   - **Feature Verification**: Does the Reference *actually* have a Back Toggle/Knot? Or is it a hanging Chin Strap? Or is it Clean?
+   - **Chin Strap vs Toggle**: A Chin Strap hangs down loosely. A Toggle is a fixed mechanism on the band. DO NOT CONFUSE THEM.
 
-SCORING (0-10):
-- 10: Perfect. Indistinguishable from ground truth.
-- 8-9: Excellent. Minor lighting diffs allowed. PASS.
-- 6-7: Acceptable but flawed. Slight texture blur or minor asymmetry. RETRY if possible.
-- < 6: FAILURE. Wrong shape, wrong material, bad artifacts, or extra items hallucinated.
+2. **PRIORITY CHECK - LOGO POSITION**: 
+   - Check the **LOGO** (Graphic/Text). Is it on the correct side? 
+   - If Reference has Logo on LEFT, Candidate MUST have it on LEFT. 
+   - **Mirror Check**: Note that Front view might show logo on left, so "Top" view must verify vertically.
+   - If Logo is missing or on wrong side -> **IMMEDIATE FAIL (Score < 5)**.
+
+3. **Identify Features (STRICT MATCHING)**:
+   - **BACK FEATURE CHECK**: 
+     - If Reference = **CLEAN/SMOOTH**: Candidate MUST be clean. Any knot/bow is a **HALLUCINATION**.
+     - If Reference = **CHIN STRAP** (Hanging): Candidate MUST show straps hanging down. A "Button Knot" or "Bow" on the band is **WRONG** (Score < 8).
+     - If Reference = **TOGGLE** (dogleash/cord lock): Candidate MUST have it.
+
+4. **Analyze View Logic**: 
+   - **BACK VIEW**: 
+     - **Hallucination Check**: "Did the generator invent a 'Cinch' or 'Bow'?" -> **FAIL**.
+     - **Chin Strap Integrity**: If the reference has a Chin Strap, it must look like two separate straps or a loop hanging DOWN, not a bunched up knot at the center back.
+   - **FLAT LAY (TOP VIEW)**: 
+     - **Orientation Rule**: Front (Brim/Logo) -> Bottom. Back (Toggle) -> Top.
+     - **Exterior Rule**: Must show **OUTSIDE**. If showing Inside -> WRONG.
+     - **Defect Check**: If Back Toggle appears at Bottom -> WRONG.
+   - **SIDE VIEW**: Profile must match.
+
+CRITICAL RULES (Hats & Fashion):
+1. **Logo Integrity**: Do not corrupt the spelling or shape of the logo.
+2. **No Hallucinated Knots**: The model loves to add "cute bows" or "knots" at the back. If the reference doesn't have it, KILL IT.
+3. **Strap Logic**: Chin Strips hang. Toggles sit. Distinguish them.
+4. **View Consistency**: Reference is King. If Reference says Clean, Candidate implies Clean.
+5. **Material Truth**: Texture/Weave must look identical.
+6. **Clean Background**: Must be Pure White.
+
+SCORING PRIORITIES (Weighted Penalty):
+1. **FATAL ERROR (Score < 5)**: MISSING KEY ELEMENTS. (e.g., Reference has a back buckle, Candidate has None). Feature Omission is the worst offense.
+2. **MAJOR ERROR (Score 5-6)**: WRONG ATTRIBUTES. (e.g., Reference is Denim, Candidate is Leather. Wrong color, wrong shape).
+3. **MINOR ERROR (Score 6-7)**: HALLUCINATIONS / GHOSTING. (e.g., Adding a logo where there is none). While bad, Missing items is worse.
+
+SCORING GUIDE (0-10):
+- 10: Perfect. Indistinguishable.
+- 8-9: Pass.
+- < 8: FAIL (Trigger Retry).
 
 OUTPUT JSON ONLY:
 {
   "score": number, 
-  "reason": "Short explanation of defects or why it passed.",
-  "retry_suggestion": "Specific instruction to fix the main defect (e.g. 'Remove extra band', 'Sharped weave'). If Pass, leave empty."
+  "reason": "Start with 'MISSING: [item]' or 'WRONG: [item]' or 'EXTRA: [item]'.",
+  "retry_suggestion": "Actionable fix. Mention the specific location.",
+  "error_type": "GEOMETRY" | "DETAIL" | "NONE"
 }
+Detail Guide:
+- "GEOMETRY": Wrong shape, distorted, wrong view angle (e.g. Front instead of Back). -> REQUIRES FULL REGEN.
+- "DETAIL": Texture wrong, logo missing/wrong, extra artifacts, bad lighting. Geometry is fine. -> CAN BE FIXED WITH IMG2IMG.
 `;
 
     const payload = {
         contents: [{
             parts: [
                 { text: promptText },
-                { text: "REFERENCE IMAGE (GROUND TRUTH):" },
-                { inline_data: { mime_type: refMimeType, data: refData } },
+                { text: "REFERENCE IMAGES (GROUND TRUTH):" },
+                ...refParts,
                 { text: "CANDIDATE IMAGE (TO EVALUATE):" },
                 { inline_data: { mime_type: "image/jpeg", data: generatedBase64 } }
             ]
@@ -790,14 +872,21 @@ OUTPUT JSON ONLY:
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
+
+        if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`API Error ${response.status}: ${errText}`);
+        }
+
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error("No JSON returned");
+        if (!text) throw new Error("No JSON returned from Supervisor");
 
-        console.log(`[Supervisor] Assessment:`, text);
+        console.log(`[Supervisor] Assessment: `, text);
         return JSON.parse(text);
     } catch (e) {
         console.error("[Supervisor] Analysis Failed", e);
-        return { score: 10, reason: "Supervisor Error (Bypassed)", retry_suggestion: "" };
+        // Expose error message to UI for debugging
+        return { score: 10, reason: `Supervisor Error (Bypassed): ${e.message}`, retry_suggestion: "", error_type: "NONE" };
     }
 };

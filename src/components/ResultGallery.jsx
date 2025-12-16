@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-const ResultGallery = ({ results }) => {
+const ResultGallery = ({ results, config }) => {
     const [selectedImage, setSelectedImage] = useState(null);
     const [isZipping, setIsZipping] = useState(false);
 
@@ -31,7 +31,13 @@ const ResultGallery = ({ results }) => {
     const handleDownloadAll = async () => {
         setIsZipping(true);
         const zip = new JSZip();
-        const folder = zip.folder("product-ai-images");
+
+        // Get Style Name for Folder/File
+        const styleName = config?.clothing ? config.clothing.replace(/\s+/g, '_') : 'ProductAI_Set';
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const zipFilename = `${styleName}_${timestamp}.zip`;
+
+        const folder = zip.folder(styleName); // Use style name for inner folder too
 
         const images = Object.values(results);
 
@@ -45,7 +51,7 @@ const ResultGallery = ({ results }) => {
         }));
 
         const content = await zip.generateAsync({ type: "blob" });
-        saveAs(content, `product-ai-set-${Date.now()}.zip`);
+        saveAs(content, zipFilename);
         setIsZipping(false);
     };
 
@@ -143,7 +149,8 @@ const ResultGallery = ({ results }) => {
                                 </div>
                             </div>
                         </motion.div>
-                    ))}
+                    );
+                })}
             </div>
 
             {/* Lightbox / Zoom Modal */}

@@ -55,6 +55,7 @@ function App() {
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
   const [config, setConfig] = useState({
+    model: 'gemini-2.5-flash-image', // Default Model
     ethnicity: 'asian',
     gender: 'female',
     scene: '',
@@ -234,7 +235,7 @@ function App() {
                 )}
               </div>
             </div>
-            <ResultGallery results={results} />
+            <ResultGallery results={results} config={config} />
           </div>
 
           {/* Action Button */}
