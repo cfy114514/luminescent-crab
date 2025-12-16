@@ -115,12 +115,15 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
                 onClick={() => inputRef.current?.click()}
             >
                 <input
+                    id="file-upload-input"
+                    name="fileUpload"
                     type="file"
                     ref={inputRef}
                     className="hidden"
                     accept="image/*"
                     multiple
                     onChange={handleFileChange}
+                    aria-label="Upload Reference Images"
                 />
 
                 <div className="flex flex-col items-center justify-center text-center space-y-2">
@@ -160,17 +163,21 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
                                     <div className="relative w-20 h-20 rounded overflow-hidden flex-shrink-0">
                                         <img
                                             src={img.preview}
-                                            alt="thumb"
+                                            alt="Reference Preview"
                                             className="w-full h-full object-cover"
                                         />
                                     </div>
 
                                     <div className="flex flex-col justify-between flex-1 py-1">
                                         <select
+                                            id={`label-select-${img.id}`}
+                                            name={`label-select-${img.id}`}
                                             value={img.label}
                                             onChange={(e) => updateLabel(img.id, e.target.value)}
                                             onClick={(e) => e.stopPropagation()}
                                             className="bg-slate-900 border border-slate-600 text-xs text-white rounded px-2 py-1 outline-none focus:border-blue-500"
+                                            aria-label="Select Image View Label"
+                                            title="Assign View Label"
                                         >
                                             {labelOptions.map(opt => (
                                                 <option key={opt.value} value={opt.value}>
@@ -187,6 +194,8 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
                                                         removeImage(img.id);
                                                     }}
                                                     className="p-1.5 bg-slate-700 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition-colors"
+                                                    aria-label="Remove Image"
+                                                    title="Remove Image"
                                                 >
                                                     <X className="w-3 h-3" />
                                                 </button>

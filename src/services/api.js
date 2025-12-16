@@ -20,15 +20,20 @@ const fileToBase64 = (file) => {
 
 // === Prompt Engineering for Views ===
 // === Prompt Engineering for Views ===
-const getViewPrompt = (viewType, config, availableLabels = []) => {
+const getViewPrompt = (viewType, config, availableLabels = [], taskKey = '') => {
+    // ... (rest of function) ...
     // Spec Requirement: Pure White Background (to be post-processed to #F9F9F9), Studio Lighting 5500K.
     // Added "NO shadows, NO filters" to base prompt.
     const base = `
-White background, Studio 5500K, 8k resolution. NO dramatic shadows, NO artistic filters, NO post-processing styles.
-GLOBAL NEGATIVE PROMPT (FORBIDDEN):
-- **NO HANG TAGS / PRICE LABELS / SECURITY TAGS**: Remove all retail tags hanging from the hat. The product must look like a clean studio sample.
-- NO MANNEQUIN HEAD (unless specified in model view).
-- NO WATERMARKS.`;
+STRICT PROTOCOL (ZERO CREATIVITY):
+1. **TEXTURE PROJECTION ONLY**: You are a texture projection engine, NOT a creative artist. Your goal is to map the Reference Product's EXACT texture and details onto a 3D volume.
+2. **GEOMETRY LOCK**: Do NOT change the shape of the product. If the reference is a flat brim, generate a flat brim. If curved, generate curved.
+3. **NO HALLUCINATION**: Do not add "cute details" like bows, knots, stickers, or tags if they do not exist in the reference.
+4. **MATERIAL TRUTH**: The weave/fabric must be IDENTICAL to the reference.
+5. **CLEAN BACKGROUND**: Pure White Hex #FFFFFF. No shadows or props unless specified.
+6. **No Text/Watermarks**: Do not render text overlaps.
+7. **NEGATIVE PROMPT**: (drawing, painting, illustration, 3d render, sketch, low quality), hanging tag, price label, security tag, plastic loop, extra bow, extra knot, hallucinated seam.
+`;
 
     // Truth Enforcing Context (User Defined Strict Mode)
     let context = `
@@ -39,11 +44,12 @@ STRICT PROTOCOL (USER DEFINED):
 1. **RESTORE ALL SHOOTING DETAILS**: You must faithfully render the texture, weave, and imperfections. CRITICAL: Analyze the specific Reference Images and their assigned LABELS (e.g., 'Detail', 'Side') to understand exactly which feature corresponds to which view.
 2. **NO INVENTION**: Do not invent details out of thin air (不能凭空添加细节).
 3. **NO BEAUTIFICATION**: Do not beautify the product (不能美化产品). Show it as it is.
-4. **ALLOWED EDIT**: You may ONLY smooth wrinkles (只能抚平褶皱). Do not alter structural geometry.
-5. **MATERIAL TRUTH**: Do not use wrong color blocks or materials (不能使用错误的色块及材质).
-6. **NO IMAGINATION**: Do not generate non-existent things (不能使用想象生成不存在的东西).
-7. **SOURCE TRUTH**: ONLY use elements present in the image (只能使用图中有的元素).
-8. **LOGO CONSISTENCY**: For products with logos, maintain Uniform Logo Size and Position relative to the product body across all generated views (保持Logo大小及位置统一).
+4. **ALLOWED EDIT**: You may ONLY smooth wrinkles (只能抚平褶皱) and remove packaging/tags. Do not alter structural geometry.
+5. **CLEANUP PROTOCOL**: Remove all Hang Tags, Price Labels, Security Sensors is MANDATORY. The product must look like a clean studio sample (必须移除所有吊牌和标签).
+6. **MATERIAL TRUTH**: Do not use wrong color blocks or materials (不能使用错误的色块及材质).
+7. **NO IMAGINATION**: Do not generate non-existent things (不能使用想象生成不存在的东西).
+8. **SOURCE TRUTH**: ONLY use elements present in the image (只能使用图中有的元素).
+9. **LOGO CONSISTENCY**: For products with logos, maintain Uniform Logo Size and Position relative to the product body across all generated views (保持Logo大小及位置统一).
 `;
 
     // Inject JSON Topology if present (Parsed or Raw)
@@ -198,9 +204,15 @@ POSE: Back to camera.
 FOCUS: Rear details of the hat.`;
                     break;
                 case 'model_lifestyle':
+                    let variation = "Primary Pose (Focus on Fit)";
+                    if (taskKey && taskKey.includes('2')) {
+                        variation = "Secondary Variation (Focus on Interaction/Context). USE A DIFFERENT POSE from the primary one.";
+                    }
+
                     specificAction = `
 ACTION: Lifestyle / Editorial Shot.
-POSE VARIATIONS (Randomly Select One):
+VARIATION MODE: ${variation}
+POSE VARIATIONS (Select One Unique to this Variation):
   - Hand Touching Brim (手扶帽檐): Natural interaction.
   - Looking Down & Smiling (低头微笑): Candid, soft expression.
   - Looking Back (回头侧望): Over the shoulder view.
@@ -441,6 +453,19 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
         return { ...base64Info, label };
     };
 
+    // 0. PRE-FLIGHT AI ANALYSIS
+    // Automatically extract feature map to guide the generator.
+    let smartConfig = { ...config };
+    try {
+        updateStatus("🤖 AI Agent: Analyzing Product Features & Layout...");
+        const analysisJson = await analyzeImages(imageObjects);
+        console.log("[Auto-Analysis] Result:", analysisJson);
+        smartConfig.description = analysisJson; // Inject into context
+    } catch (err) {
+        console.error("Auto-analysis failed, proceeding without context:", err);
+        updateStatus("⚠️ Analysis Failed. Proceeding with raw generation...");
+    }
+
     // 1. Process Initial Images
     let processedImages = await Promise.all(imageObjects.map(processImg));
 
@@ -474,89 +499,144 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
 
     // If Model View is enabled, add selected model sub-tasks
     if (config.includeModelView) {
-        const selectedModels = modelTasks.filter(task =>
-            config.modelViewSelection ? config.modelViewSelection[task.key] : true
-        );
-        tasks = [...tasks, ...selectedModels];
+        // Feature: Lifestyle Double Shot. If 'model_lifestyle' is selected, generate 2 variations.
+        const modelSelection = config.modelViewSelection || {};
+
+        modelTasks.forEach(task => {
+            if (modelSelection[task.key] || !config.modelViewSelection) {
+                if (task.key === 'model_lifestyle') {
+                    // Inject 2 distinct tasks for Lifestyle
+                    tasks.push({ key: 'model_lifestyle_1', label: '生活 (Lifestyle A)', type: 'model_lifestyle' });
+                    tasks.push({ key: 'model_lifestyle_2', label: '生活 (Lifestyle B)', type: 'model_lifestyle' });
+                } else {
+                    tasks.push(task);
+                }
+            }
+        });
     }
 
-    // --- ProductAI 2.0 Workflow: Decoupled Parallel Generation (No Anchor Injection) ---
-    // Modification: All tasks run in parallel using ORIGINAL source images to prevent error propagation.
+    // --- ProductAI 2.0 Workflow: Optimized Concurrency ---
+
+    // Concurrency Helper
+    const runWithConcurrency = async (items, limit, fn) => {
+        const results = [];
+        const executing = [];
+        for (const item of items) {
+            const p = fn(item).then(res => results.push(res));
+            executing.push(p);
+            if (executing.length >= limit) {
+                await Promise.race(executing);
+            }
+            // Clean up finished promises
+            /* Note: simplistic implementation, for this scale (~10 items) pure Promise.race loop is imperfect but sufficient or use a proper pool logic. 
+               Actually, simpler approach for stability: */
+        }
+        await Promise.all(executing);
+        return results;
+    };
+
+    // Better Async Pool Implementation
+    const asyncPool = async (poolLimit, iterable, iteratorFn) => {
+        const ret = [];
+        const executing = [];
+        for (const item of iterable) {
+            const p = Promise.resolve().then(() => iteratorFn(item, iterable));
+            ret.push(p);
+            if (poolLimit <= iterable.length) {
+                const e = p.then(() => executing.splice(executing.indexOf(e), 1));
+                executing.push(e);
+                if (executing.length >= poolLimit) {
+                    await Promise.race(executing);
+                }
+            }
+        }
+        return Promise.all(ret);
+    };
 
     const totalTasks = tasks.length;
     let completedTasks = 0;
     let generatedResults = { images: {}, payload: null };
 
     if (totalTasks > 0) {
-        updateStatus(`Starting Parallel Optimization for ${totalTasks} Views...`);
+        // Boosted Concurrency: 4 parallel requests (balance between speed and rate limits)
+        const CONCURRENCY_LIMIT = 4;
+        updateStatus(`Starting Accelerated Generation (${CONCURRENCY_LIMIT}x Parallel)...`);
 
-        // Use map then Promise.all, but inject a DELAY based on index
-        const results = await Promise.all(tasks.map(async (task, index) => {
-            // ARTIFICIAL STAGGER: Wait 1.5s * index to force sequential-ish feeling
-            // This prevents "Boom, all done" and ensures users see them pop in 1 by 1
-            await delay(index * 1500);
-
+        const results = await asyncPool(CONCURRENCY_LIMIT, tasks, async (task) => {
             try {
+                // Determine Concurrency Slot/Start time (for logging)
+                // Small stagger to prevent exact millisecond collision (100ms)
+                await delay(Math.random() * 200);
+
                 // Feature: Smart Fallback. Pass available labels to Prompt Engine.
                 const availableLabels = processedImages.map(img => img.label);
 
                 let attempt = 0;
-                const maxRetries = 2; // Retry 0, 1, 2 (Total 3 attempts max if bad)
-                let currentPrompt = getViewPrompt(task.type, config, availableLabels);
+                const maxRetries = 2;
+                // Use smartConfig (with auto-analysis) instead of base config
+                let currentPrompt = getViewPrompt(task.type, smartConfig, availableLabels, task.key);
                 let finalUrl = "";
                 let finalAssessment = null;
                 let passed = false;
 
-                let img2imgInput = null; // Store failed image if usable for repainting
+                let img2imgInput = null;
 
                 // --- RETRY LOOP ---
                 while (attempt <= maxRetries && !passed) {
                     if (attempt > 0) updateStatus(`Task ${task.label}: Retrying (Attempt ${attempt + 1})...`);
 
-                    // 1. Generate (Pass previous failed image if available for Img2Img)
+                    // 1. Generate 
                     const url = await generateSingleImage(processedImages, currentPrompt, apiKey, apiUrl, img2imgInput);
                     finalUrl = url;
 
                     // 2. Assess
+                    const isSupervisorOn = smartConfig.supervisorEnabled !== false;
+
                     if (url) {
                         try {
-                            const assessment = await assessImageQuality(url, currentPrompt, processedImages, apiKey, apiUrl, task.label);
-                            finalAssessment = assessment;
-
-                            if (assessment.score >= 8) {
+                            if (!isSupervisorOn) {
+                                // Manual Override
+                                console.log(`[Loop] Supervisor Disabled. Skipping QC for ${task.key}.`);
                                 passed = true;
-                                console.log(`[Loop] Task ${task.key} PASSED with Score ${assessment.score}`);
-                            } else {
-                                console.warn(`[Loop] Task ${task.key} FAILED QC (Score ${assessment.score}). Reason: ${assessment.reason}`);
-
-                                // PRESERVE FAILED RESULT:
-                                // User wants to see ALL attempts. We assign a unique key to failed ones.
-                                const failKey = `${task.key}_fail_${attempt + 1}`;
-                                const failedResult = {
-                                    url: finalUrl,
-                                    label: `${task.label} (Fail #${attempt + 1})`,
-                                    qc: assessment
+                                finalAssessment = {
+                                    score: 10,
+                                    reason: "Supervisor Disabled by User",
+                                    retry_suggestion: "",
+                                    error_type: "NONE"
                                 };
+                            } else {
+                                const assessment = await assessImageQuality(url, currentPrompt, processedImages, apiKey, apiUrl, task.label);
+                                finalAssessment = assessment;
 
-                                // Stream immediately
-                                if (onImageGenerated) onImageGenerated(failKey, failedResult, completedTasks, totalTasks);
+                                if (assessment.score >= 8) {
+                                    passed = true;
+                                    console.log(`[Loop] Task ${task.key} PASSED with Score ${assessment.score}`);
+                                } else {
+                                    console.warn(`[Loop] Task ${task.key} FAILED QC (Score ${assessment.score}). Reason: ${assessment.reason}`);
 
-                                // Save to final results (so it's included in download)
-                                generatedResults.images[failKey] = failedResult;
+                                    // PRESERVE FAILED RESULT:
+                                    const failKey = `${task.key}_fail_${attempt + 1}`;
+                                    const failedResult = {
+                                        url: finalUrl,
+                                        label: `${task.label} (Fail #${attempt + 1})`,
+                                        qc: assessment
+                                    };
 
-                                // Prepare for next retry
-                                if (attempt < maxRetries) {
-                                    // SMART RETRY STRATEGY:
-                                    if (assessment.error_type === "DETAIL") {
-                                        // Geometry is good, Texture/Detail is bad -> Use Img2Img
-                                        img2imgInput = finalUrl;
-                                        currentPrompt += `\n\nPREVIOUS ATTEMPT (ATTACHED) HAD GOOD GEOMETRY BUT DETAIL ERRORS. FIX: ${assessment.retry_suggestion}. KEEP THE POSE, FIX THE DETAILS!`;
-                                        console.log(`[Loop] Smart Retry: Using Img2Img for Detail Fix.`);
-                                    } else {
-                                        // Geometry Bad -> Full Regen
-                                        img2imgInput = null;
-                                        currentPrompt += `\n\nPREVIOUS ATTEMPT FAILED (BAD GEOMETRY). CRITICISM: ${assessment.reason}. RESTART AND FIX: ${assessment.retry_suggestion}.`;
-                                        console.log(`[Loop] Smart Retry: Full Clean Regen.`);
+                                    // Stream immediately
+                                    if (onImageGenerated) onImageGenerated(failKey, failedResult, completedTasks, totalTasks);
+                                    generatedResults.images[failKey] = failedResult;
+
+                                    // Prepare for next retry
+                                    if (attempt < maxRetries) {
+                                        if (assessment.error_type === "DETAIL") {
+                                            img2imgInput = finalUrl;
+                                            currentPrompt += `\n\nPREVIOUS ATTEMPT (ATTACHED) HAD GOOD GEOMETRY BUT DETAIL ERRORS. FIX: ${assessment.retry_suggestion}. KEEP THE POSE, FIX THE DETAILS!`;
+                                            console.log(`[Loop] Smart Retry: Using Img2Img for Detail Fix.`);
+                                        } else {
+                                            img2imgInput = null;
+                                            currentPrompt += `\n\nPREVIOUS ATTEMPT FAILED (BAD GEOMETRY). CRITICISM: ${assessment.reason}. RESTART AND FIX: ${assessment.retry_suggestion}.`;
+                                            console.log(`[Loop] Smart Retry: Full Clean Regen.`);
+                                        }
                                     }
                                 }
                             }
@@ -581,7 +661,6 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
 
                 if (onImageGenerated) onImageGenerated(task.key, resultData, completedTasks, totalTasks);
 
-                // Return result with QC Metadata
                 return {
                     key: task.key,
                     data: resultData
@@ -590,10 +669,10 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
                 console.error(`Task ${task.key} failed:`, err);
                 return { key: task.key, error: err.message };
             }
-        }));
+        });
 
         results.forEach(res => {
-            if (!res.error) {
+            if (res && !res.error) {
                 generatedResults.images[res.key] = res.data;
             }
         });
@@ -635,7 +714,7 @@ Do NOT output markdown code blocks. Output RAW JSON only.
 
 REQUIRED JSON STRUCTURE:
 {
-  "_thinking_trace": "string (Step-by-step reasoning. CRITICAL: Explicitly verify if a 'Band' or 'Eyelets' actually exist. Do not assume. Many hats have NO band. If just a crease, say so.)",
+  "_thinking_trace": "string (Identify ALL non-product elements first. e.g. 'Found Hang Tag on left', 'Found Price Label'. THESE MUST BE EXCLUDED from the component list.)",
   "reference_image_manifest": [
       { 
         "image_label": "string", 
@@ -644,28 +723,25 @@ REQUIRED JSON STRUCTURE:
       }
   ],
   "global_consistency": {
-      "material_name": "string",
-      "texture_description": "string",
-      "consistency_rule": "The described material MUST be applied uniformly. Ignore lighting variations."
+      "primary_material": "string (Identify the core fabric/material. e.g. 'Straw', 'Canvas', 'Wool Felt')",
+      "primary_color_unified": "string (The TRUE color code/name cross-referenced from all images. Ignore bad lighting. e.g. 'Navy Blue #000080')",
+      "texture_surface": "string (e.g. 'Rough woven texture', 'Smooth matte finish', 'Shiny plastic')",
+      "consistency_rule": "Apply this SINGLE material definitions to the entire product. Do not mix textures unless specified."
   },
-  "feature_side": "left" | "right" | "symmetrical" | "unknown",
-  "design_dna": {
-     "material_origin": "string",
-     "weave_pattern": "string",
-     "color_palette": "string"
+  "component_breakdown": {
+      "main_body_material": "string",
+      "brim_material": "string",
+      "accent_elements": [
+          { "part_name": "string", "material": "string", "color": "string" }
+      ]
   },
-  "geometry_profile": {
-     "crown_shape": "string",
-     "brim_behavior": "string",
-     "volumetric_feel": "string"
-  },
-  "components": {
-     "band_specs": "string (Start with 'None' if no distinct band exists. Do NOT describe shadows as bands.)",
-     "hardware_list": ["string"],
-     "decoration_logic": "string"
+  "element_layout_map": {
+      "front_view_components": ["string (e.g. 'Logo at Viewer Left', 'Vent Hole at Top')"],
+      "back_view_components": ["string (e.g. 'Strap at Center', 'Buckle on Right')"],
+      "side_profile_features": ["string"]
   },
   "spatial_topology": {
-      "logo_position": "string",
+      "logo_position_viewer_context": "string (CRITICAL: 'Viewer Left' or 'Viewer Right'. If Reference has Logo on Left, Top View MUST show it on Left relative to center.)",
       "asymmetry_notes": "string",
       "side_visibility_check": "string"
   },
@@ -677,9 +753,16 @@ REQUIRED JSON STRUCTURE:
 }
 
 CRITICAL ANTI-HALLUCINATION RULES:
-1. **NO GENERIC COMPONENTS**: Do not list "Leather Band" or "Eyelets" unless you clearly see them. If the hat is a simple straw mold, say "No Band", "No Eyelets".
-2. **Material Truth**: You must define a SINGLE "Global Material" based on the highest quality image provided.
+1. **IGNORE NON-PRODUCT ELEMENTS**: Do NOT list "Hang Tags", "Price Labels", "Security Sensors", "Plastic Loops", or "Packaging" as components. They are trash. Ignore them.
+2. **Material Truth**: You must define a SINGLE "Global Material".
 3. **Back View Enforcer**: If a "Back View" image is provided, you MUST extract its features into "back_view_details".
+4. **Viewer Context & Top View**: 
+   - **Relative Logic**: In Top View (Flat Lay), the Logo Position must physically align with the Front View. 
+   - If Front View = Logo on Left, then Top View = Logo on Left.
+   - Do NOT flip or mirror features associated with specific sides.
+5. **LABEL AUTHORITY**: Trust the provided image labels (e.g. "Front View", "Side View") implicitly.
+   - If an image is labeled "Front View", you MUST treat it as the Front, even if it looks like a side profile.
+   - **User Input > AI Inference**.
 `.trim();
 
     // Construct Payload with Interleaved Labels
@@ -794,63 +877,48 @@ const assessImageQuality = async (generatedImageUrl, originalPrompt, referenceIm
     const promptText = `
 SYSTEM ROLE: Senior Product Quality Control Specialist (AI Supervisor).
 TASK: Evaluate the "Candidate Image" against the provided "Reference Images" given the REQUIRED VIEW: **${viewName.toUpperCase()}**.
-CONTEXT: The User wants "Smart Correction". If the generator added a "Decorative Knot" that isn't in the reference, you MUST flag it for removal.
+CONTEXT: The User demands PIXEL-PERFECT FIDELITY. The AI Generator is prone to "Hallucinating" logos or mirroring them. You must catch this.
+
+STRICT "VIEWER-PERSPECTIVE" RULES:
+- "LEFT" always means "LEFT SIDE OF THE IMAGE" (Viewer's Left).
+- "RIGHT" always means "RIGHT SIDE OF THE IMAGE" (Viewer's Right).
+- Do not use "Stage Left" or "Wearer's Left". Stick to visual 2D coordinates.
 
 STRICT ANALYSIS STEPS:
-1. **Analyze Reference**: Look at the Reference Images. Identify key features.
-   - **Feature Verification**: Does the Reference *actually* have a Back Toggle/Knot? Or is it a hanging Chin Strap? Or is it Clean?
-   - **Chin Strap vs Toggle**: A Chin Strap hangs down loosely. A Toggle is a fixed mechanism on the band. DO NOT CONFUSE THEM.
+1. **REFERENCE TRUTH CHECK**: 
+   - Look at the Reference. Does it have a Logo? If YES, where is it? (e.g., "Viewer's Left").
+   - Does the Candidate have the SAME Logo in the SAME Visual Position?
+   - **CRITICAL**: If the Reference has NO Logo, the Candidate MUST HAVE NO LOGO. Any added logo is an automatic FAIL.
+   - **CRITICAL**: If the Reference has a Toggle/Knot at the back, the Candidate MUST have it. If Reference is smooth, Candidate must be smooth.
 
-2. **PRIORITY CHECK - LOGO POSITION**: 
-   - Check the **LOGO** (Graphic/Text). Is it on the correct side? 
-   - If Reference has Logo on LEFT, Candidate MUST have it on LEFT. 
-   - **Mirror Check**: Note that Front view might show logo on left, so "Top" view must verify vertically.
-   - If Logo is missing or on wrong side -> **IMMEDIATE FAIL (Score < 5)**.
+2. **TOP VIEW ORIENTATION CHECK (FLAT LAY)**:
+   - **Relative Mapping**: Imagine the hat resting on its brim.
+   - Front (Bottom of Frame) corresponds to Front View.
+   - If Front View has Logo on LEFT, Top View MUST have Logo on LEFT relative to the center.
+   - **Fail Condition**: If Top View shows Logo on Right (mirrored), it is WRONG -> FAIL.
 
-3. **Identify Features (STRICT MATCHING)**:
-   - **BACK FEATURE CHECK**: 
-     - If Reference = **CLEAN/SMOOTH**: Candidate MUST be clean. Any knot/bow is a **HALLUCINATION**.
-     - If Reference = **CHIN STRAP** (Hanging): Candidate MUST show straps hanging down. A "Button Knot" or "Bow" on the band is **WRONG** (Score < 8).
-     - If Reference = **TOGGLE** (dogleash/cord lock): Candidate MUST have it.
+3. **CLEANUP / TAG ENFORCEMENT**:
+   - **TRASH DETECTION**: Does the Candidate show "Hang Tags", "Price Labels", "Plastic Loops", or "Security Tags"?
+   - **YES -> FAIL IMMEDIATE** (Score < 5). The User hates tags. 
+   - **NO (Clean)** -> PASS. (Removing tags is Desired Behavior).
 
-4. **Analyze View Logic**: 
-   - **BACK VIEW**: 
-     - **Hallucination Check**: "Did the generator invent a 'Cinch' or 'Bow'?" -> **FAIL**.
-     - **Chin Strap Integrity**: If the reference has a Chin Strap, it must look like two separate straps or a loop hanging DOWN, not a bunched up knot at the center back.
-   - **FLAT LAY (TOP VIEW)**: 
-     - **Orientation Rule**: Front (Brim/Logo) -> Bottom. Back (Toggle) -> Top.
-     - **Exterior Rule**: Must show **OUTSIDE**. If showing Inside -> WRONG.
-     - **Defect Check**: If Back Toggle appears at Bottom -> WRONG.
-   - **SIDE VIEW**: Profile must match.
+4. **HALLUCINATION DETECTOR**:
+   - Did the generator add a "Brand Tag", "Sticker", or "Extra Seam" that is NOT in the reference? -> FAIL.
+   - Did the generator change the Shape (e.g., made a flat brim curved)? -> FAIL.
 
-CRITICAL RULES (Hats & Fashion):
-1. **Logo Integrity**: Do not corrupt the spelling or shape of the logo.
-2. **No Hallucinated Knots**: The model loves to add "cute bows" or "knots" at the back. If the reference doesn't have it, KILL IT.
-3. **Strap Logic**: Chin Strips hang. Toggles sit. Distinguish them.
-4. **View Consistency**: Reference is King. If Reference says Clean, Candidate implies Clean.
-5. **Material Truth**: Texture/Weave must look identical.
-6. **Clean Background**: Must be Pure White.
+SCORING CRITERIA:
+- **10/10**: Perfect Match. Texture projected exactly. No extra elements. No Tags. Logo correct side.
+- **8/9**: Minor lighting shift. All geometry/logos correct. No Tags.
+- **5-7**: Good geometry, but Logo is mirrored/missing OR **VISIBLE TAGS REMAIN**. -> **FAIL** (Score < 8 triggers retry).
+- **1-4**: Completely wrong view, wrong shape, massive hallucination, or wrong logo side.
 
-SCORING PRIORITIES (Weighted Penalty):
-1. **FATAL ERROR (Score < 5)**: MISSING KEY ELEMENTS. (e.g., Reference has a back buckle, Candidate has None). Feature Omission is the worst offense.
-2. **MAJOR ERROR (Score 5-6)**: WRONG ATTRIBUTES. (e.g., Reference is Denim, Candidate is Leather. Wrong color, wrong shape).
-3. **MINOR ERROR (Score 6-7)**: HALLUCINATIONS / GHOSTING. (e.g., Adding a logo where there is none). While bad, Missing items is worse.
-
-SCORING GUIDE (0-10):
-- 10: Perfect. Indistinguishable.
-- 8-9: Pass.
-- < 8: FAIL (Trigger Retry).
-
-OUTPUT JSON ONLY:
+OUTPUT JSON FORMAT (Raw JSON only):
 {
-  "score": number, 
-  "reason": "Start with 'MISSING: [item]' or 'WRONG: [item]' or 'EXTRA: [item]'.",
-  "retry_suggestion": "Actionable fix. Mention the specific location.",
-  "error_type": "GEOMETRY" | "DETAIL" | "NONE"
+  "score": number (0-10),
+  "reason": "string (Concise failure reason, e.g. 'visible hang tag', 'Logo mirrored to Right', 'Added non-existent feature')",
+  "retry_suggestion": "string (Actionable fix, e.g. 'REMOVE HANG TAG', 'MOVE LOGO TO VIEWER LEFT', 'REMOVE HALLUCINATED KNOT')",
+  "error_type": "GEOMETRY" | "TEXTURE" | "LOGO" | "TAGS" | "NONE"
 }
-Detail Guide:
-- "GEOMETRY": Wrong shape, distorted, wrong view angle (e.g. Front instead of Back). -> REQUIRES FULL REGEN.
-- "DETAIL": Texture wrong, logo missing/wrong, extra artifacts, bad lighting. Geometry is fine. -> CAN BE FIXED WITH IMG2IMG.
 `;
 
     const payload = {

@@ -229,10 +229,28 @@ function App() {
                   <button
                     onClick={() => setIsInspectorOpen(true)}
                     className="flex items-center space-x-2 text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20"
+                    title="View API Payload"
+                    aria-label="Open Request Inspector"
                   >
                     <Code className="w-3 h-3" />
                   </button>
                 )}
+
+                {/* Supervisor Toggle */}
+                <button
+                  onClick={() => setConfig(prev => ({ ...prev, supervisorEnabled: !prev.supervisorEnabled }))}
+                  className={`
+                    flex items-center space-x-2 text-xs transition-colors px-3 py-1.5 rounded-full border
+                    ${config.supervisorEnabled
+                      ? 'bg-green-500/20 text-green-300 border-green-500/30 hover:bg-green-500/30'
+                      : 'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700'}
+                  `}
+                  title="Toggle AI Quality Supervisor"
+                  aria-label={config.supervisorEnabled ? "Disable AI Supervisor" : "Enable AI Supervisor"}
+                >
+                  <div className={`w-2 h-2 rounded-full ${config.supervisorEnabled ? 'bg-green-400' : 'bg-slate-500'}`} />
+                  <span>{config.supervisorEnabled ? 'Supervisor: ON' : 'Supervisor: OFF'}</span>
+                </button>
               </div>
             </div>
             <ResultGallery results={results} config={config} />

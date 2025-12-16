@@ -16,10 +16,13 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
             {/* Model Selection */}
             <div className="space-y-2 pb-4 border-b border-slate-700/50">
-                <label className="text-sm text-green-400 flex items-center gap-2 font-medium">
+                <label htmlFor="model-select" className="text-sm text-green-400 flex items-center gap-2 font-medium">
                     <Sparkles className="w-4 h-4" /> 生成模型 (AI Model)
                 </label>
                 <select
+                    id="model-select"
+                    name="model"
+                    title="Select AI Model"
                     value={config.model || 'gemini-2.5-flash-image'}
                     onChange={(e) => handleChange('model', e.target.value)}
                     className="w-full bg-slate-900/50 border border-green-500/30 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-green-500/50 outline-none transition-all font-mono"
@@ -32,38 +35,7 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 </p>
             </div>
 
-            {/* Feature Description (Moved to Top) */}
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <label className="text-sm text-yellow-500/80 flex items-center gap-2 font-medium">
-                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" /> 产品特征描述 (关键 / JSON)
-                    </label>
-                    {onAnalyze && (
-                        <button
-                            onClick={onAnalyze}
-                            disabled={isAnalyzing}
-                            className="text-xs flex items-center gap-1 px-2 py-1 rounded bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 transition-colors disabled:opacity-50"
-                        >
-                            {isAnalyzing ? (
-                                <span className="animate-pulse">Analyzing...</span>
-                            ) : (
-                                <>
-                                    <Sparkles className="w-3 h-3" />
-                                    AI 智能分析
-                                </>
-                            )}
-                        </button>
-                    )}
-                </div>
-                <textarea
-                    value={config.description || ''}
-                    onChange={(e) => handleChange('description', e.target.value)}
-                    placeholder="例如：Logo位于左侧（非居中），帽檐左边比右边宽... (或者粘贴 AI 分析的 JSON)"
-                    rows={6}
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-yellow-500/30 outline-none transition-all resize-y min-h-[120px] text-sm font-mono"
-                />
-                <p className="text-xs text-slate-500">* 用于纠正AI对非对称设计的偏差，请详细描述或使用 JSON。</p>
-            </div>
+
 
             {/* View Selection Toggles */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -79,12 +51,13 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                                 <p className="text-xs text-slate-400">选择需要生成的标准视角</p>
                             </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer" title="Toggle Product Views">
                             <input
                                 type="checkbox"
                                 className="sr-only peer"
                                 checked={config.includeProductViews}
                                 onChange={(e) => handleChange('includeProductViews', e.target.checked)}
+                                aria-label="Toggle Product Spec Views"
                             />
                             <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                         </label>
@@ -113,6 +86,7 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                                             const newSelection = { ...config.viewSelection, [item.k]: e.target.checked };
                                             handleChange('viewSelection', newSelection);
                                         }}
+                                        aria-label={`Select ${item.l}`}
                                     />
                                     <span className={`text-xs ${config.viewSelection[item.k] ? 'text-blue-200' : 'text-slate-500'} group-hover:text-blue-300 transition-colors`}>
                                         {item.l}
@@ -135,12 +109,13 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                                 <p className="text-xs text-slate-400">选择需要生成的模特视角</p>
                             </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
+                        <label className="relative inline-flex items-center cursor-pointer" title="Toggle Model Views">
                             <input
                                 type="checkbox"
                                 className="sr-only peer"
                                 checked={config.includeModelView}
                                 onChange={(e) => handleChange('includeModelView', e.target.checked)}
+                                aria-label="Toggle Model Views"
                             />
                             <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                         </label>
@@ -168,6 +143,7 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                                             const newSelection = { ...config.modelViewSelection, [item.k]: e.target.checked };
                                             handleChange('modelViewSelection', newSelection);
                                         }}
+                                        aria-label={`Select ${item.l}`}
                                     />
                                     <span className={`text-xs ${config.modelViewSelection[item.k] ? 'text-purple-200' : 'text-slate-500'} group-hover:text-purple-300 transition-colors`}>
                                         {item.l}
@@ -182,10 +158,13 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Ethnicity */}
                 <div className="space-y-2">
-                    <label className="text-sm text-slate-400 flex items-center gap-2">
+                    <label htmlFor="ethnicity-select" className="text-sm text-slate-400 flex items-center gap-2">
                         <User2 className="w-4 h-4" /> 模特人种
                     </label>
                     <select
+                        id="ethnicity-select"
+                        name="ethnicity"
+                        title="Select Model Ethnicity"
                         value={config.ethnicity}
                         onChange={(e) => handleChange('ethnicity', e.target.value)}
                         className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
@@ -200,10 +179,13 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
                 {/* Gender */}
                 <div className="space-y-2">
-                    <label className="text-sm text-slate-400 flex items-center gap-2">
+                    <label htmlFor="gender-select" className="text-sm text-slate-400 flex items-center gap-2">
                         <User2 className="w-4 h-4" /> 性别
                     </label>
                     <select
+                        id="gender-select"
+                        name="gender"
+                        title="Select Model Gender"
                         value={config.gender}
                         onChange={(e) => handleChange('gender', e.target.value)}
                         className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
@@ -216,17 +198,20 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
             {/* Scene */}
             <div className="space-y-2">
-                <label className="text-sm text-slate-400 flex items-center gap-2">
+                <label htmlFor="scene-input" className="text-sm text-slate-400 flex items-center gap-2">
                     <MapPin className="w-4 h-4" /> 场景 / 背景
                 </label>
                 <div className="relative">
                     <input
+                        id="scene-input"
+                        name="scene"
                         type="text"
                         list="scene-options"
                         value={config.scene || ''}
                         onChange={(e) => handleChange('scene', e.target.value)}
                         placeholder="选择预设或手动输入 (Select or Type)..."
                         className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                        aria-label="Scene Selection"
                     />
                     <datalist id="scene-options">
                         <option value="Minimalist Concrete Studio (极简水泥风)" />
@@ -242,19 +227,25 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
             {/* Target Color (Palette) */}
             <div className="space-y-2">
-                <label className="text-sm text-slate-400 flex items-center gap-2">
+                <label htmlFor="target-color-input" className="text-sm text-slate-400 flex items-center gap-2">
                     <Palette className="w-4 h-4" /> 产品色调 (Target Color)
                 </label>
                 <div className="flex gap-3">
                     <div className="relative w-12 h-10 flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 transition-colors">
                         <input
+                            id="target-color-picker"
+                            name="targetColorPicker"
                             type="color"
                             value={config.targetColor || '#ffffff'}
                             onChange={(e) => handleChange('targetColor', e.target.value)}
                             className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer p-0 border-0"
+                            title="Pick Target Color"
+                            aria-label="Pick Target Color"
                         />
                     </div>
                     <input
+                        id="target-color-input"
+                        name="targetColor"
                         type="text"
                         value={config.targetColor || ''}
                         onChange={(e) => handleChange('targetColor', e.target.value)}
@@ -267,16 +258,19 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
             {/* Clothing */}
             <div className="space-y-2">
-                <label className="text-sm text-slate-400 flex items-center gap-2">
+                <label htmlFor="clothing-input" className="text-sm text-slate-400 flex items-center gap-2">
                     <Shirt className="w-4 h-4" /> 服装风格
                 </label>
                 <input
+                    id="clothing-input"
+                    name="clothing"
                     type="text"
                     list="clothing-options"
                     value={config.clothing || ''}
                     onChange={(e) => handleChange('clothing', e.target.value)}
                     placeholder="选择预设或手动输入..."
                     className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                    aria-label="Clothing Style"
                 />
                 <datalist id="clothing-options">
                     <option value="Casual Minimalist (休闲极简)" />
@@ -290,16 +284,19 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
             {/* Hair Color */}
             <div className="space-y-2">
-                <label className="text-sm text-slate-400 flex items-center gap-2">
+                <label htmlFor="hair-color-input" className="text-sm text-slate-400 flex items-center gap-2">
                     <Palette className="w-4 h-4" /> 发色
                 </label>
                 <input
+                    id="hair-color-input"
+                    name="hairColor"
                     type="text"
                     list="hair-options"
                     value={config.hairColor || ''}
                     onChange={(e) => handleChange('hairColor', e.target.value)}
                     placeholder="选择预设或手动输入..."
                     className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                    aria-label="Hair Color"
                 />
                 <datalist id="hair-options">
                     <option value="Dark Brown (深棕色)" />
@@ -314,15 +311,18 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
 
             {/* Manual Prompt Override */}
             <div className="space-y-2 pt-4 border-t border-slate-700/50">
-                <label className="text-sm text-purple-400 flex items-center gap-2 font-medium">
+                <label htmlFor="custom-prompt-input" className="text-sm text-purple-400 flex items-center gap-2 font-medium">
                     <Sparkles className="w-4 h-4" /> 附加提示词 (Custom Prompt)
                 </label>
                 <textarea
+                    id="custom-prompt-input"
+                    name="customPrompt"
                     value={config.customPrompt || ''}
                     onChange={(e) => handleChange('customPrompt', e.target.value)}
                     placeholder="在此输入额外的 Prompt 指令 (将在最后拼接到提示词中)... 例如: 'Add intense rim lighting', 'Make it look like a sketch'"
                     rows={3}
                     className="w-full bg-slate-900/50 border border-purple-500/30 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-purple-500/50 outline-none transition-all resize-y text-xs font-mono"
+                    aria-label="Custom Prompt Override"
                 />
             </div>
         </div>
