@@ -30,9 +30,9 @@ STRICT PROTOCOL (ZERO CREATIVITY):
 2. **GEOMETRY LOCK**: Do NOT change the shape of the product. If the reference is a flat brim, generate a flat brim. If curved, generate curved.
 3. **NO HALLUCINATION**: Do not add "cute details" like bows, knots, stickers, or tags if they do not exist in the reference.
 4. **MATERIAL TRUTH**: The weave/fabric must be IDENTICAL to the reference.
-5. **CLEAN BACKGROUND**: Pure White Hex #FFFFFF. No shadows or props unless specified.
+5. **CLEAN BACKGROUND**: **PURE WHITE (HEX #FFFFFF)**. Natural contact shadows are ALLOWED to ground the object. (Do not render a gray studio background, but cast shadows are okay).
 6. **No Text/Watermarks**: Do not render text overlaps.
-7. **NEGATIVE PROMPT**: (drawing, painting, illustration, 3d render, sketch, low quality), hanging tag, price label, security tag, plastic loop, extra bow, extra knot, hallucinated seam.
+7. **NEGATIVE PROMPT**: (gray background:1.5), (off-white:1.5), (studio floor), (vignette), drawing, painting, illustration, 3d render, sketch, low quality, hanging tag, price label, security tag, plastic loop, extra bow, extra knot.
 `;
 
     // Truth Enforcing Context (User Defined Strict Mode)
