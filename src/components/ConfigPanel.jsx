@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { User2, MapPin, Shirt, Palette, Layers, Sparkles } from 'lucide-react';
+import { User2, MapPin, Shirt, Palette, Layers, Sparkles, Wand2, Info } from 'lucide-react';
 
-const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
+const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing, presets }) => {
     const handleChange = (key, value) => {
         setConfig(prev => ({ ...prev, [key]: value }));
     };
@@ -36,6 +36,57 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
             </div>
 
 
+            {/* Style Selection (New) */}
+            <div className="space-y-3 pb-6 border-b border-slate-700/50">
+                <label className="text-sm text-purple-400 flex items-center gap-2 font-medium">
+                    <Wand2 className="w-4 h-4" /> 风格选择 (Style Preset)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                    {presets?.styles?.map(style => (
+                        <button
+                            key={style.id}
+                            onClick={() => handleChange('styleId', style.id)}
+                            className={`
+                                relative p-3 rounded-xl border text-left transition-all group overflow-hidden
+                                ${config.styleId === style.id
+                                    ? 'bg-purple-600/20 border-purple-500 shadow-lg shadow-purple-500/10'
+                                    : 'bg-slate-900/40 border-slate-700 hover:border-slate-500'}
+                            `}
+                        >
+                            <div className={`text-xs font-bold ${config.styleId === style.id ? 'text-white' : 'text-slate-300'}`}>
+                                {style.name}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">
+                                {style.description}
+                            </div>
+                            {config.styleId === style.id && (
+                                <div className="absolute top-1 right-1">
+                                    <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
+                                </div>
+                            )}
+                        </button>
+                    ))}
+                    <button
+                        onClick={() => handleChange('styleId', null)}
+                        className={`
+                            p-3 rounded-xl border text-center transition-all
+                            ${!config.styleId
+                                ? 'bg-slate-700 border-slate-500 text-white'
+                                : 'bg-slate-900/40 border-slate-700 text-slate-500 hover:text-slate-300'}
+                        `}
+                    >
+                        <div className="text-xs font-bold">无预设 (None)</div>
+                    </button>
+                </div>
+                {config.styleId && (
+                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/10 flex items-start gap-2">
+                        <Info className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
+                        <p className="text-[10px] text-purple-300/70 leading-relaxed italic">
+                            已自动应用“{presets.styles.find(s => s.id === config.styleId)?.name}”提示词合并逻辑。
+                        </p>
+                    </div>
+                )}
+            </div>
 
             {/* View Selection Toggles */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,7 +180,10 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                                 { k: 'model_angle', l: '斜侧 (Angle)' },
                                 { k: 'model_side', l: '侧面 (Side)' },
                                 { k: 'model_back', l: '背面 (Back)' },
-                                { k: 'model_lifestyle', l: '生活 (Lifestyle)' }
+                                { k: 'model_lifestyle_hat', l: '生活-手扶帽檐' },
+                                { k: 'model_lifestyle_smile', l: '生活-低头微笑' },
+                                { k: 'model_lifestyle_backlook', l: '生活-回头侧望' },
+                                { k: 'model_lifestyle_sitting', l: '生活-坐姿造型' }
                             ].map(item => (
                                 <label key={item.k} className="flex items-center space-x-2 cursor-pointer group">
                                     <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config.modelViewSelection[item.k] ? 'bg-purple-500 border-purple-500' : 'border-slate-600 bg-slate-800'}`}>
@@ -155,19 +209,50 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 </div>
             </div>
 
+            {/* Model Identity Preset */}
+            <div className="md:col-span-2 space-y-2">
+                <label htmlFor="model-preset-select" className="text-sm text-slate-400 flex items-center gap-2">
+                    <User2 className="w-4 h-4" /> 预设模特身份 (Named Model)
+                </label>
+                <select
+                    id="model-preset-select"
+                    name="modelId"
+                    value={config.modelId || ''}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        handleChange('modelId', val);
+                    }}
+                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all"
+                >
+                    <option value="">-- 手动配置 (Manual) --</option>
+                    {presets?.models?.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                </select>
+                {config.modelId && (
+                    <p className="text-[10px] text-purple-400 italic">
+                        * 已应用预设模特：基础人种/性别选项已锁定以维持肖像一致性。
+                    </p>
+                )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Ethnicity */}
                 <div className="space-y-2">
                     <label htmlFor="ethnicity-select" className="text-sm text-slate-400 flex items-center gap-2">
-                        <User2 className="w-4 h-4" /> 模特人种
+                        <User2 className={`w-4 h-4 ${config.modelId ? 'opacity-30' : ''}`} />
+                        <span className={config.modelId ? 'opacity-30' : ''}>模特人种</span>
                     </label>
                     <select
                         id="ethnicity-select"
                         name="ethnicity"
-                        title="Select Model Ethnicity"
+                        disabled={!!config.modelId}
                         value={config.ethnicity}
-                        onChange={(e) => handleChange('ethnicity', e.target.value)}
-                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                        onChange={(e) => {
+                            handleChange('ethnicity', e.target.value);
+                            if (config.modelId) handleChange('modelId', '');
+                        }}
+                        className={`w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all ${config.modelId ? 'cursor-not-allowed opacity-50' : ''}`}
                     >
                         <option value="asian">亚洲 (Asian)</option>
                         <option value="caucasian">欧美 (Caucasian)</option>
@@ -180,15 +265,19 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                 {/* Gender */}
                 <div className="space-y-2">
                     <label htmlFor="gender-select" className="text-sm text-slate-400 flex items-center gap-2">
-                        <User2 className="w-4 h-4" /> 性别
+                        <User2 className={`w-4 h-4 ${config.modelId ? 'opacity-30' : ''}`} />
+                        <span className={config.modelId ? 'opacity-30' : ''}>性别</span>
                     </label>
                     <select
                         id="gender-select"
                         name="gender"
-                        title="Select Model Gender"
+                        disabled={!!config.modelId}
                         value={config.gender}
-                        onChange={(e) => handleChange('gender', e.target.value)}
-                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
+                        onChange={(e) => {
+                            handleChange('gender', e.target.value);
+                            if (config.modelId) handleChange('modelId', '');
+                        }}
+                        className={`w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all ${config.modelId ? 'cursor-not-allowed opacity-50' : ''}`}
                     >
                         <option value="female">女性 (Female)</option>
                         <option value="male">男性 (Male)</option>
@@ -324,6 +413,104 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing }) => {
                     className="w-full bg-slate-900/50 border border-purple-500/30 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-purple-500/50 outline-none transition-all resize-y text-xs font-mono"
                     aria-label="Custom Prompt Override"
                 />
+            </div>
+
+            {/* Advanced Settings Section */}
+            <div className="pt-4 border-t border-slate-700/50 space-y-4">
+                <details className="group">
+                    <summary className="flex items-center justify-between cursor-pointer list-none">
+                        <div className="flex items-center gap-2 text-sm font-bold text-slate-400 group-hover:text-white transition-colors">
+                            <Layers className="w-4 h-4" /> 高级生成参数 (Advanced Settings)
+                        </div>
+                        <div className="text-slate-500 group-open:rotate-180 transition-transform">
+                            <Layers className="w-4 h-4 ml-1 transform transition-transform" />
+                        </div>
+                    </summary>
+
+                    <div className="mt-4 space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {/* Thinking Level */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-slate-400 flex items-center gap-2">
+                                    <Sparkles className="w-3.5 h-3.5 text-blue-400" /> 思考深度 (Thinking Level)
+                                </label>
+                                <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+                                    {['low', 'high'].map((level) => (
+                                        <button
+                                            key={level}
+                                            onClick={() => handleChange('thinkingLevel', level)}
+                                            className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${config.thinkingLevel === level
+                                                ? 'bg-blue-600 text-white shadow-lg'
+                                                : 'text-slate-500 hover:text-slate-300'
+                                                }`}
+                                        >
+                                            {level === 'high' ? 'HIGH (推荐)' : 'LOW'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-relaxed">
+                                High模式下模型会进行深度逻辑推理，显著提升复杂指令的还原度和细节质量。
+                            </p>
+                        </div>
+
+                        {/* Image Size & Aspect Ratio Grid */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-400">输出分辨率 (Image Size)</label>
+                                <select
+                                    value={config.imageSize || '1K'}
+                                    onChange={(e) => handleChange('imageSize', e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-1 focus:ring-blue-500 outline-none"
+                                >
+                                    <option value="1K">1K (Standard)</option>
+                                    <option value="2K">2K (High Def)</option>
+                                    <option value="4K">4K (Ultra HD)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-400">构图比例 (Aspect Ratio)</label>
+                                <select
+                                    value={config.aspect_ratio || '1:1'}
+                                    onChange={(e) => handleChange('aspect_ratio', e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-1 focus:ring-blue-500 outline-none"
+                                >
+                                    <option value="1:1">1:1 (Square)</option>
+                                    <option value="16:9">16:9 (Cinema)</option>
+                                    <option value="9:16">9:16 (TikTik/Story)</option>
+                                    <option value="4:3">4:3 (Classic)</option>
+                                    <option value="3:4">3:4 (Portrait)</option>
+                                    <option value="2:3">2:3 (Photo)</option>
+                                    <option value="3:2">3:2 (Landscape)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Temperature Slider */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-slate-400">创意发散度 (Temperature)</label>
+                                <span className="text-[10px] font-mono text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">
+                                    {config.temperature?.toFixed(1) || '1.0'}
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.0"
+                                max="2.0"
+                                step="0.1"
+                                value={config.temperature || 1.0}
+                                onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
+                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            />
+                            <div className="flex justify-between text-[8px] text-slate-600 font-bold uppercase tracking-tighter">
+                                <span>精确稳定 (Reliable)</span>
+                                <span>默认 (Default)</span>
+                                <span>充满变数 (Creative)</span>
+                            </div>
+                        </div>
+                    </div>
+                </details>
             </div>
         </div>
     );

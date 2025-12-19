@@ -1,0 +1,143 @@
+{
+    "styles": [
+        {
+            "id": "luxury_silk",
+            "name": "Luxury Silk (奢华丝绸)",
+            "description": "High-end silk texture with elegant sheen and soft lighting.",
+            "basePrompt": "Luxury silk fabric, elegant sheen, soft studio lighting, high fashion photography",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "matte_tech",
+            "name": "Matte Tech (磨砂科技)",
+            "description": "Clean matte finish with sharp edges and neutral tones.",
+            "basePrompt": "Matte finish, high-tech aesthetic, clean industrial design, sharp focus",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        }
+    ],
+    "viewpoints": [
+        {
+            "id": "front",
+            "name": "正面 (Front)",
+            "active": true,
+            "basePrompt": "Front view, centered composition, straight-on angle, eye-level camera, standard product photography",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "angle_front",
+            "name": "斜侧 (Angle)",
+            "active": true,
+            "basePrompt": "Three-quarter view, 45-degree angle, showing depth and volume, dynamic composition",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "back",
+            "name": "背面 (Back)",
+            "active": true,
+            "basePrompt": "Rear view, 180-degree rotation, clean back profile, flat lighting",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "top",
+            "name": "顶视 (Top)",
+            "active": true,
+            "basePrompt": "Bird's eye view, top-down perspective, overhead camera, flat lay composition",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "inside",
+            "name": "内饰 (Inside)",
+            "active": true,
+            "basePrompt": "Interior macro view, looking inside the product, showing construction and lining",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "detail",
+            "name": "细节 (Detail)",
+            "active": true,
+            "basePrompt": "Extreme macro close-up, texture-focused shot, shallow depth of field, high detail resolution",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_front",
+            "name": "模特正面 (Model Front)",
+            "active": true,
+            "basePrompt": "Mid-Torso (Elbow Level) shot, model posing directly facing camera, head to elbows visible, confident posture, neutral background",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_angle",
+            "name": "模特斜侧 (Model Angle)",
+            "active": true,
+            "basePrompt": "Three-quarter model pose, rotated 45 degrees, dynamic interaction, soft lighting",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_side",
+            "name": "模特侧面 (Model Side)",
+            "active": true,
+            "basePrompt": "Side profile pose, model looking silhouette, high contrast light, athletic build",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_back",
+            "name": "模特背面 (Model Back)",
+            "active": true,
+            "basePrompt": "Mid-Torso (Elbow Level) view of model from behind, showing rear details, captured from head to elbows, neutral posture",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_side",
+            "name": "模特侧面 (Model Side)",
+            "active": true,
+            "basePrompt": "Mid-Torso (Elbow Level) side profile pose, model looking silhouette, head to elbow framing",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_lifestyle_hat",
+            "name": "生活-手扶帽檐",
+            "active": true,
+            "basePrompt": "Mid-Torso lifestyle photography, model gently touching the brim of her hat with one hand, natural pose from head to elbows, soft lighting",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_lifestyle_smile",
+            "name": "生活-低头微笑",
+            "active": true,
+            "basePrompt": "Mid-Torso candid shot, model looking down slightly with a warm natural smile, head to elbow framing, gentle expression, soft bokeh background",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_lifestyle_backlook",
+            "name": "生活-回头侧望",
+            "active": true,
+            "basePrompt": "Dynamic lifestyle pose, model walking away then looking back over her shoulder at the camera, graceful movement",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        },
+        {
+            "id": "model_lifestyle_sitting",
+            "name": "生活-坐姿造型",
+            "active": true,
+            "basePrompt": "Fashion lifestyle photography, model sitting in a stylish and relaxed pose, interacting with the environment",
+            "interrogatedPrompt": "",
+            "referenceImages": []
+        }
+    ],
+    "models": []
+}

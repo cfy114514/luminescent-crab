@@ -3,8 +3,10 @@ import UploadZone from './components/UploadZone';
 import ResultGallery from './components/ResultGallery';
 import ConfigPanel from './components/ConfigPanel';
 import RequestInspector from './components/RequestInspector';
-import { generateImages, analyzeImages } from './services/api';
-import { Sparkles, Loader2, Play, Code } from 'lucide-react';
+import { generateImages, analyzeImages, mergePrompts } from './services/api';
+import { Sparkles, Loader2, Play, Code, Settings } from 'lucide-react';
+import AdminView from './components/Admin/AdminView';
+import defaultPresets from './config/presets.json';
 
 function App() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -14,6 +16,36 @@ function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [visualProgress, setVisualProgress] = useState(0); // Smooth interpolated progress
   const [statusMessage, setStatusMessage] = useState(""); // Granular Status
+  const [isAdminMode, setIsAdminMode] = useState(false);
+
+  // Load Presets from LocalStorage or default
+  const [presets, setPresets] = useState(() => {
+    const saved = localStorage.getItem('product_ai_presets');
+    const initial = saved ? JSON.parse(saved) : defaultPresets;
+
+    // Sync logic: Ensure new default viewpoints/styles are added even if user has saved data
+    const syncedViewpoints = [...initial.viewpoints];
+    defaultPresets.viewpoints.forEach(dv => {
+      if (!syncedViewpoints.find(v => v.id === dv.id)) {
+        syncedViewpoints.push(dv);
+      }
+    });
+
+    // Remove legacy one-off lifestyle attempts to avoid clutter
+    const legacyIds = ['model_lifestyle', 'model_lifestyle_walking', 'model_lifestyle_leaning'];
+    const finalViewpoints = syncedViewpoints.filter(v => !legacyIds.includes(v.id));
+
+    return {
+      ...initial,
+      viewpoints: finalViewpoints,
+      models: initial.models || []
+    };
+  });
+
+  const handleSavePresets = (newPresets) => {
+    setPresets(newPresets);
+    localStorage.setItem('product_ai_presets', JSON.stringify(newPresets));
+  };
 
   // Store multiple files for context
   const [referenceImages, setReferenceImages] = useState([]);
@@ -58,9 +90,17 @@ function App() {
     model: 'gemini-2.5-flash-image', // Default Model
     ethnicity: 'asian',
     gender: 'female',
-    scene: '',
+    targetColor: '',
     clothing: '',
     hairColor: '',
+    customPrompt: '',
+    // Advanced
+    styleId: '',
+    modelId: '', // Model Identity Preset
+    thinkingLevel: 'high',
+    imageSize: '1K',
+    aspect_ratio: '1:1',
+    temperature: 1.0,
     description: '',
     includeProductViews: true, // Default: Generate Spec
     includeModelView: true,     // Default: Generate Model
@@ -77,7 +117,10 @@ function App() {
       model_angle: true,
       model_side: true,
       model_back: true,
-      model_lifestyle: true
+      model_lifestyle_hat: true,
+      model_lifestyle_smile: true,
+      model_lifestyle_backlook: true,
+      model_lifestyle_sitting: true
     }
   });
 
@@ -123,18 +166,23 @@ function App() {
     setVisualProgress(0);
     setError(null);
 
+    // Note: Prompt merging is now primarily handled inside generateImages/getViewPrompt
+    // using the provided presets to ensure both style and viewpoint consistency.
+    const finalConfig = { ...config };
+
     try {
       // Pass callback for real-time updates AND Status
       const data = await generateImages(
         referenceImages,
-        config,
+        finalConfig,
         (key, resultData, current, total) => {
           setResults(prev => ({ ...prev, [key]: resultData }));
           setProgress({ current, total });
         },
         (status) => {
           setStatusMessage(status); // Real-time text update
-        }
+        },
+        presets
       );
 
       setResults(prev => ({ ...prev, ...data.images }));
@@ -172,7 +220,25 @@ function App() {
         <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
           ProductAI 智能图生图
         </span>
+        <button
+          onClick={() => setIsAdminMode(true)}
+          className="ml-auto p-2 hover:bg-white/5 rounded-lg text-slate-500 hover:text-purple-400 transition-colors"
+          title="Open Admin Dashboard"
+        >
+          <Settings className="w-5 h-5" />
+        </button>
       </header>
+
+      {/* Admin View Overlay */}
+      {isAdminMode && (
+        <div className="fixed inset-0 z-[100] animate-in fade-in duration-300">
+          <AdminView
+            onBack={() => setIsAdminMode(false)}
+            presets={presets}
+            setPresets={handleSavePresets}
+          />
+        </div>
+      )}
 
       {/* Main Split Layout */}
       <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-140px)] min-h-[600px]">
@@ -200,6 +266,7 @@ function App() {
               setConfig={setConfig}
               onAnalyze={handleAnalyze}
               isAnalyzing={isAnalyzing}
+              presets={presets}
             />
           </div>
         </div>

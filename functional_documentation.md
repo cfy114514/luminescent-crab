@@ -23,6 +23,18 @@
     *   **Geometry Handling (形体处理)**: 允许一定程度的标准化 (Idealization)，不强制锁定为原图的物理塌陷状态 (Reverted "Master Mold" Lock)，但允许 AI 修正不完美的曲线。
     *   **Smart Context**: 自动消费 Reviewer 提取的 `smartConfig.description` 作为 Ground Truth。
 
+### 1.4 Modular Preset Engine (预设拼装层)
+*   **功能**: `ModelEditor`, `StyleEditor`, `ViewpointEditor` & `getViewPrompt`
+*   **角色**: "Modular Scene Compositor" (模块化场景合成器)
+*   **核心逻辑**:
+    *   **Tri-Modular Splicing (三元拼装)**: 提示词由 **Identity (身份)** + **Composition (构图)** + **Artistic Style (风格)** 三部分模块化拼接。
+    *   **Auto-Sync Logic**: 系统启动时自动对比 `presets.json`。若发现新的系统预置（如新增的模特视角），将自动合并至用户的本地存储中，确保平滑升级。
+    *   **Refined Lifestyle Poses**: 生活姿势已精准细化为：手扶帽檐 (Hat)、低头微笑 (Smile)、回头侧望 (Look back)、坐姿造型 (Sitting)。每个机位均支持独立逆向提取与生成。
+    *   **Identity DNA Extraction**: 专门针对模特的五官、肤温、发质进行 AI 逆向，侧重物理身份的唯一性。
+    *   **Global Pose Templates**: 人体姿势与动作描述被集成在“视角/机位配置”中，作为全局模板。不同模特共用同一套机位动作，确保输出的一致性。
+    *   **Pose/Angle Lock**: 通过 `viewpoints` 模式专门提取构图与镜头焦距参数，不受艺术风格或模特长相干扰。
+    *   **Framing Standard (构图规范)**: 模特展示全机位强制采用 **Strict Half-Body (Waist-Up)**。拍摄距离固定为 **2.0m**，镜头焦距锁定为 **85mm 等效**，确保头部至腰部区域的构图比例在所有视角下保持高度一致。
+    *   **Mutual Exclusion (互斥规则)**: 启用模特预设后，强制禁用 UI 中的基础人种/性别选项，确保 AI 提示词的一致性。
 ### 1.3 Supervisor Persona (质检层)
 *   **功能**: `assessImageQuality` (api.js)
 *   **角色**: "Product Quality Control Specialist" (产品质检专家)
@@ -48,6 +60,7 @@
 
 ### 3.1配置面板 (`ConfigPanel.jsx`)
 *   **UI 简化**: 移除了手动的 "Feature Description" (特征描述) 输入框，完全由 AI 后台自动完成。
+*   **预设系统**: 新增“风格”、“机位”、“模特”三位一体的预设管理后台 (Admin Mode)。
 *   **交互优化**: 目前仅保留 "生成模型"、"视角选择"、"模特设置" 等高频控制项。
 
 ## 4. 已知限制与待办

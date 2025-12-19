@@ -20,8 +20,41 @@ const fileToBase64 = (file) => {
 
 // === Prompt Engineering for Views ===
 // === Prompt Engineering for Views ===
-const getViewPrompt = (viewType, config, availableLabels = [], taskKey = '') => {
-    // ... (rest of function) ...
+const getViewPrompt = (viewType, config, availableLabels = [], taskKey = '', presets = null) => {
+    // 1. Fetch Style Preset (if selected)
+    const selectedStyle = presets?.styles?.find(s => s.id === config.styleId);
+
+    // 2. Fetch Viewpoint Preset (if available)
+    // Mapping: specTasks/modelTasks 'type' to presets.json 'id'
+    // presets.json ids are: front, angle_front, back, top, inside, detail
+    const selectedViewpoint = presets?.viewpoints?.find(v => v.id === viewType || (viewType.startsWith('model_') && v.id === viewType.replace('model_', '')));
+
+    // 3. Fetch Model Preset (if selected)
+    const selectedModel = presets?.models?.find(m => m.id === config.modelId);
+
+    // Helper to merge base + interrogated + viewpoint + model prompts
+    const styleBase = selectedStyle ? selectedStyle.basePrompt : "";
+    const styleAI = selectedStyle ? selectedStyle.interrogatedPrompt : "";
+
+    const viewBase = selectedViewpoint ? selectedViewpoint.basePrompt : "";
+    const viewAI = selectedViewpoint ? selectedViewpoint.interrogatedPrompt : "";
+
+    const modelAI = selectedModel ? selectedModel.visual_identity : "";
+
+    // 4. Fetch Model-Specific Viewpoint Override (NEW)
+    // If the model has a specific pose saved for this viewType, it takes precedence over the generic viewpoint interrogated prompt
+    const cleanViewId = viewType.startsWith('model_') ? viewType.replace('model_', '') : viewType;
+    const modelViewPose = selectedModel?.viewpoints?.[cleanViewId] || "";
+
+    // Hierarchy: 
+    // - Base: Generic Viewpoint Base (e.g. Frontal logic)
+    // - AI Components: Mixed (Identity + (Model-Specific Pose OR Generic Pose) + Artistic Style)
+    const orchestratedBase = [viewBase, styleBase].filter(Boolean).join(', ');
+
+    // Logic: Use model-specific pose if available, else fallback to generic viewAI
+    const effectivePosePrompt = modelViewPose || viewAI;
+    const orchestratedAI = [effectivePosePrompt, styleAI, modelAI].filter(Boolean).join(', ');
+
     // Spec Requirement: Pure White Background (to be post-processed to #F9F9F9), Studio Lighting 5500K.
     // Added "NO shadows, NO filters" to base prompt.
     const base = `
@@ -50,6 +83,8 @@ STRICT PROTOCOL (USER DEFINED):
 7. **NO IMAGINATION**: Do not generate non-existent things (不能使用想象生成不存在的东西).
 8. **SOURCE TRUTH**: ONLY use elements present in the image (只能使用图中有的元素).
 9. **LOGO CONSISTENCY**: For products with logos, maintain Uniform Logo Size and Position relative to the product body across all generated views (保持Logo大小及位置统一).
+10. **COMPOSITION ANCHOR**: ${orchestratedBase}
+11. **AESTHETIC STYLE**: ${orchestratedAI}
 `;
 
     // Inject JSON Topology if present (Parsed or Raw)
@@ -148,9 +183,19 @@ CONSTRAINT:
         case 'model_side':
         case 'model_back':
         case 'model_lifestyle':
+        case 'model_lifestyle_hat':
+        case 'model_lifestyle_smile':
+        case 'model_lifestyle_backlook':
+        case 'model_lifestyle_sitting':
             // Logic for Model / Wardrobe / Hair / Scene
             const hairLogic = config.hairColor ? `, hair color: ${config.hairColor}` : "";
-            const modelDesc = `${config.ethnicity || 'asian'} ${config.gender || 'female'} model${hairLogic}`;
+
+            // 1. Identity Logic
+            const modelIdentity = selectedModel ? modelAI : `${config.ethnicity || 'asian'} ${config.gender || 'female'} model${hairLogic}`;
+
+            // 2. Modular Splicing: Identity + Viewpoint Logic + Artistic Style
+            // Note: viewAI/viewBase contains composition/pose, styleAI contains texture/lighting, modelAI contains facial features
+            const modelDesc = [modelIdentity, viewBase, viewAI, styleAI].filter(Boolean).join(', ');
 
             const scene = config.scene ? `in a ${config.scene}` : "Pure White Background";
             const wardrobeStyle = config.clothing ? config.clothing : "Match the product's style (Minimalist/Neutral).";
@@ -161,72 +206,11 @@ CONSTRAINT:
                 modelFallback = "MISSING BACK REFERENCE: Render the product back as PLAIN/SMOOTH. Do not invent details.";
             }
 
-            // Global Constraints (Wardrobe, Composition, Subject Priority)
-            const globalModelConstraints = `
-SYSTEM ROLE: Commercial Fashion Compositor & Virtual Stylist.
-GLOBAL MODEL CONSTRAINTS (ALL VIEWS):
-1. SUBJECT PRIORITY: The hat MUST occupy 50% of the visual weight. The model is the canvas; the hat is the HERO.
-2. COMPOSITION: Head-and-Shoulders or Half-Body crop ONLY. Fixed distance (1.3m).
-3. WARDROBE PROTOCOL (STRICT):
-    - NO patterns, prints, or logos on clothing.
-    - FABRIC: Linen, Cotton, or simple Knitwear.
-    - COLORS: Neutral, Light tones (White, Beige, Light Grey) ONLY. Dark/Neon forbidden.
-    - STYLE: ${wardrobeStyle}
-4. LIGHTING: Soft, even lighting, 5500K. No hard shadows on face.
-5. BACKGROUND: ${scene}.
-${modelFallback}
-`;
 
-            let specificAction = "";
-            switch (viewType) {
-                case 'model_front':
-                    specificAction = `
-ACTION: Portrait Frontal View (0°).
-POSE: Faces camera directly. Direct eye contact.
-FOCUS: Hat perfectly centered. Show brim width and crown height clearly.`;
-                    break;
-                case 'model_angle':
-                    specificAction = `
-ACTION: Angled Front View (45°).
-POSE: Head turned slightly to side.
-FOCUS: Showcase volumetric structure of brim and crown curvature.`;
-                    break;
-                case 'model_side':
-                    specificAction = `
-ACTION: Side Profile View (90°).
-POSE: Looking straight ahead (off-camera).
-FOCUS: Sharp profile. Highlight brim silhouette (flat or curved). Edge lines must be razor sharp.`;
-                    break;
-                case 'model_back':
-                    specificAction = `
-ACTION: Rear View (180°).
-POSE: Back to camera.
-FOCUS: Rear details of the hat.`;
-                    break;
-                case 'model_lifestyle':
-                    let variation = "Primary Pose (Focus on Fit)";
-                    if (taskKey && taskKey.includes('2')) {
-                        variation = "Secondary Variation (Focus on Interaction/Context). USE A DIFFERENT POSE from the primary one.";
-                    }
 
-                    specificAction = `
-ACTION: Lifestyle / Editorial Shot.
-VARIATION MODE: ${variation}
-POSE VARIATIONS (Select One Unique to this Variation):
-  - Hand Touching Brim (手扶帽檐): Natural interaction.
-  - Looking Down & Smiling (低头微笑): Candid, soft expression.
-  - Looking Back (回头侧望): Over the shoulder view.
-  - Sitting Pose (坐姿造型): Relaxed posture.
-LIGHTING: Soft, even, diffused lighting (均匀柔光). No harsh shadows.
-FLOW: Posture and eye contact must be natural and fluid.
-FOCUS: Highlight the brim lines (突出帽檐线条) and the fit in different wearing states (不同佩戴状态的效果).`;
-                    break;
-            }
-
-            prompt = `${globalModelConstraints}
-TASK: Composite the Reference Product onto a ${modelDesc}.
+            prompt = `TASK: Composite the Reference Product onto a ${modelDesc}.
 SCENE: ${scene}.
-${specificAction}
+
 IMPORTANT: The product appearance (texture/shape) must remain IDENTICAL to the reference. Do not wrap or warp the product unrealistically. ${base}`;
             break;
 
@@ -335,7 +319,8 @@ const generateSingleImageNanoBanana = async (referenceImages, prompt, apiKey, ap
 };
 
 // --- Google Gemini API Adapter (Sync Call) ---
-const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null) => {
+const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null, config = null) => {
+    // Determine provider based on URL or Config
 
     // Ensure Key is passed
     if (!apiUrl.includes("key=") && apiKey) {
@@ -354,8 +339,16 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
     });
 
     // Content Part
+    // Inject Advanced Settings as text instructions since standard generationConfig doesn't support them
+    const advancedInstructions = config ? `
+[GENERATION DIRECTIVES]
+- ASPECT RATIO: ${config.aspect_ratio || '1:1'}
+- OUTPUT QUALITY: ${config.imageSize || '1K'}
+- THINKING DEPTH: ${config.thinkingLevel || 'high'} (Optimize for reasoning and complex spatial logic)
+`.trim() : '';
+
     const parts = [
-        { text: prompt },
+        { text: `${advancedInstructions}\n\n${prompt}`.trim() },
         ...inlineDataParts
     ];
 
@@ -377,7 +370,7 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
     const payload = {
         contents: [{ parts: parts }],
         generationConfig: {
-            temperature: 0.4,
+            temperature: config ? (config.temperature ?? 1.0) : 1.0,
             topK: 40,
             topP: 0.9,
             maxOutputTokens: 2048,
@@ -414,26 +407,23 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
 };
 
 // --- Main Dispatcher ---
-const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null) => {
+const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null, config = null) => {
     // Determine provider based on URL or Config
     if (apiUrl.includes("nanobanana")) {
-        return await generateSingleImageNanoBanana(referenceImages, prompt, apiKey, apiUrl); // Note: NanoBanana adapter not updated, assuming direct usage
+        return await generateSingleImageNanoBanana(referenceImages, prompt, apiKey, apiUrl);
     } else {
-        return await generateSingleImageGemini(referenceImages, prompt, apiKey, apiUrl, img2imgInput);
+        return await generateSingleImageGemini(referenceImages, prompt, apiKey, apiUrl, img2imgInput, config);
     }
 };
 
-export const generateImages = async (imageObjects, config, onImageGenerated, onStatus) => {
+export const generateImages = async (imageObjects, config, onImageGenerated, onStatus, presets = null) => {
     const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
 
     // Dynamic URL Construction based on Config Model
-    let apiUrl = import.meta.env.VITE_NANOBANANA_API_URL || '';
-    if (config.model) {
+    let apiUrl = import.meta.env.VITE_API_URL_GENERATOR || import.meta.env.VITE_NANOBANANA_API_URL || '';
+    if (config.model && apiUrl) {
         // Regex to replace any existing model name "gemini-..." inside the URL
         apiUrl = apiUrl.replace(/models\/[a-zA-Z0-9-.]+:/, `models/${config.model}:`);
-    } else {
-        // Fallback default logic if not specified
-        apiUrl = apiUrl.replace('{gemini-3-pro-image-preview}', 'gemini-2.5-flash-image');
     }
 
     console.log(`[API] Using Model: ${config.model || 'Default'} -> URL: ${apiUrl}`);
@@ -479,14 +469,18 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
         { key: 'detail', label: '纹理特写 (Detail)', type: 'detail' }
     ];
 
-    // Updated Model Tasks based on new SOP
-    const modelTasks = [
-        { key: 'model_front', label: '模特展示-正面 (Front)', type: 'model_front' },
-        { key: 'model_angle', label: '模特展示-斜侧 (Angle)', type: 'model_angle' },
-        { key: 'model_side', label: '模特展示-侧面 (Side)', type: 'model_side' },
-        { key: 'model_back', label: '模特展示-背面 (Back)', type: 'model_back' },
-        { key: 'model_lifestyle', label: '模特展示-生活 (Lifestyle)', type: 'model_lifestyle' }
-    ];
+    // Updated Model Tasks logic: Discover dynamically from config/presets
+    const modelSelection = config.modelViewSelection || {};
+    const selectedModelTasks = Object.keys(modelSelection)
+        .filter(key => modelSelection[key] && key.startsWith('model_'))
+        .map(key => {
+            const preset = presets?.viewpoints?.find(v => v.id === key);
+            return {
+                key: key,
+                label: preset ? preset.name : key,
+                type: key
+            };
+        });
 
     // Build Task List
     let tasks = [];
@@ -499,20 +493,12 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
 
     // If Model View is enabled, add selected model sub-tasks
     if (config.includeModelView) {
-        // Feature: Lifestyle Double Shot. If 'model_lifestyle' is selected, generate 2 variations.
-        const modelSelection = config.modelViewSelection || {};
+        tasks = [...tasks, ...selectedModelTasks];
 
-        modelTasks.forEach(task => {
-            if (modelSelection[task.key] || !config.modelViewSelection) {
-                if (task.key === 'model_lifestyle') {
-                    // Inject 2 distinct tasks for Lifestyle
-                    tasks.push({ key: 'model_lifestyle_1', label: '生活 (Lifestyle A)', type: 'model_lifestyle' });
-                    tasks.push({ key: 'model_lifestyle_2', label: '生活 (Lifestyle B)', type: 'model_lifestyle' });
-                } else {
-                    tasks.push(task);
-                }
-            }
-        });
+        // Legacy compatibility: If specifically 'model_lifestyle' is chosen without subtypes, do double shot
+        if (modelSelection['model_lifestyle']) {
+            tasks.push({ key: 'model_lifestyle_2', label: '生活 (Lifestyle Variation)', type: 'model_lifestyle' });
+        }
     }
 
     // --- ProductAI 2.0 Workflow: Optimized Concurrency ---
@@ -573,8 +559,7 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
 
                 let attempt = 0;
                 const maxRetries = 2;
-                // Use smartConfig (with auto-analysis) instead of base config
-                let currentPrompt = getViewPrompt(task.type, smartConfig, availableLabels, task.key);
+                let currentPrompt = getViewPrompt(task.type, smartConfig, availableLabels, task.key, presets);
                 let finalUrl = "";
                 let finalAssessment = null;
                 let passed = false;
@@ -586,13 +571,20 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
                     if (attempt > 0) updateStatus(`Task ${task.label}: Retrying (Attempt ${attempt + 1})...`);
 
                     // 1. Generate 
-                    const url = await generateSingleImage(processedImages, currentPrompt, apiKey, apiUrl, img2imgInput);
-                    finalUrl = url;
+                    const resultUrl = await generateSingleImage(
+                        processedImages,
+                        currentPrompt,
+                        apiKey,
+                        apiUrl,
+                        img2imgInput,
+                        smartConfig // Pass the full config containing advanced settings
+                    );
+                    finalUrl = resultUrl;
 
                     // 2. Assess
                     const isSupervisorOn = smartConfig.supervisorEnabled !== false;
 
-                    if (url) {
+                    if (resultUrl) {
                         try {
                             if (!isSupervisorOn) {
                                 // Manual Override
@@ -605,7 +597,7 @@ export const generateImages = async (imageObjects, config, onImageGenerated, onS
                                     error_type: "NONE"
                                 };
                             } else {
-                                const assessment = await assessImageQuality(url, currentPrompt, processedImages, apiKey, apiUrl, task.label);
+                                const assessment = await assessImageQuality(resultUrl, currentPrompt, processedImages, apiKey, apiUrl, task.label);
                                 finalAssessment = assessment;
 
                                 if (assessment.score >= 8) {
@@ -749,6 +741,10 @@ REQUIRED JSON STRUCTURE:
       "back_view_details": "string",
       "inside_view_details": "string",
       "top_view_details": "string"
+  },
+  "lifestyle_context": {
+      "interaction_rules": "string (How should the product interact with a human? e.g. 'Can be tilted', 'Must maintain rigid top shape even if touched')",
+      "occlusion_tolerance": "string (Which parts can be covered by hair or hands?)"
   }
 }
 
@@ -805,16 +801,16 @@ CRITICAL ANTI-HALLUCINATION RULES:
  */
 const assessImageQuality = async (generatedImageUrl, originalPrompt, referenceImageObjList, apiKey, apiUrl, viewName = "General") => {
     // Ensure we use Gemini 2.0 Flash for vision capabilities
-    let reviewApiUrl = "";
+    let reviewApiUrl = import.meta.env.VITE_API_URL_REVIEWER || '';
 
-    if (apiUrl && apiUrl.includes("googleapis.com")) {
-        // User requested strict adherence to "gemini-2.5-flash"
-        reviewApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-    } else if (import.meta.env.VITE_NANOBANANA_API_URL && import.meta.env.VITE_NANOBANANA_API_URL.includes("gemini")) {
-        // Update Proxy URL to target 2.5 Flash
-        reviewApiUrl = import.meta.env.VITE_NANOBANANA_API_URL.replace(/gemini-[\w.-]+-exp/, 'gemini-2.5-flash').replace('gemini-3-pro-image-preview', 'gemini-2.5-flash');
-    } else {
-        reviewApiUrl = apiUrl;
+    if (!reviewApiUrl) {
+        if (apiUrl && apiUrl.includes("googleapis.com")) {
+            reviewApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+        } else if (import.meta.env.VITE_NANOBANANA_API_URL && import.meta.env.VITE_NANOBANANA_API_URL.includes("gemini")) {
+            reviewApiUrl = import.meta.env.VITE_NANOBANANA_API_URL.replace(/gemini-[\w.-]+-exp/, 'gemini-2.5-flash').replace('gemini-3-pro-image-preview', 'gemini-2.5-flash');
+        } else {
+            reviewApiUrl = apiUrl;
+        }
     }
 
     if (!reviewApiUrl) {
@@ -957,4 +953,149 @@ OUTPUT JSON FORMAT (Raw JSON only):
         // Expose error message to UI for debugging
         return { score: 10, reason: `Supervisor Error (Bypassed): ${e.message}`, retry_suggestion: "", error_type: "NONE" };
     }
+};
+
+/**
+ * Interrogate Reference Images to reverse engineer a prompt.
+ * @param {Array} imageObjects 
+ * @returns {Promise<Object>} Interrogation results (style, prompt, description)
+ */
+export const interrogateImages = async (imageObjects, mode = 'styles') => {
+    const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
+    const apiUrl = import.meta.env.VITE_API_URL_INTERROGATOR ||
+        (import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('gemini-3-pro-image-preview', 'gemini-2.0-flash-exp') : '');
+
+    if (!apiKey || !apiUrl) throw new Error("Missing API Key");
+
+    const processedImages = await Promise.all(imageObjects.map(async (imgObj) => {
+        const file = imgObj.file ? imgObj.file : imgObj;
+        return await fileToBase64(file);
+    }));
+
+    let focusAreas = "";
+    let outputSchema = "";
+
+    if (mode === 'model_identity') {
+        focusAreas = `
+1. **Facial Structure**: Eye shape, nose bridge height, lip volume, jawline, and proportions.
+2. **Skin & Beauty**: Skin tone, texture (pores, freckles), and ethnicity markers.
+3. **Hair Style**: Texture, length, and exact color.
+4. **Physique**: General body build and height perception.
+`;
+        outputSchema = `{
+  "visual_description": "A summary of the model's look.",
+  "visual_identity": "Prompt segment defining ONLY physical appearance (face, skin, hair).",
+  "consistency_notes": "Critical features for identity."
+}`;
+    } else if (mode === 'model_pose') {
+        focusAreas = `
+1. **Human Action**: Detailed description of the specific pose (e.g., "Looking over shoulder", "One hand in pocket").
+2. **Dynamic & Energy**: Relaxed, formal, athletic, or editorial.
+3. **Framing & Scale**: Subject's position in frame (Half-body, full-body) and relative size.
+`;
+        outputSchema = `{
+  "visual_description": "Describing the pose and action.",
+  "pose_prompt": "Prompt segment defining ONLY the HUMAN ACTION AND POSE (no face/outfit details).",
+  "framing_notes": "Camera distance and framing logic."
+}`;
+    } else if (mode === 'viewpoints') {
+        focusAreas = `
+1. **Composition**: Rule of thirds, centered, asymmetrical.
+2. **Camera Angle**: Focal length (e.g., 85mm), camera height (eye-level, low, high), and distance (Portrait, Full Body, Macro).
+3. **Pose & Dynamic**: Subject's orientation and relative scale to the frame.
+`;
+        outputSchema = `
+{
+  "composition_ratio": "e.g., 70% subject coverage, centered",
+  "reverse_prompt_fragment": "The prompt snippet defining THE COMPOSITION, POSE, AND ANGLE ONLY.",
+  "visual_description": "Describing the framing and camera logic."
+}
+`;
+    } else {
+        // Default: Styles
+        focusAreas = `
+1. **Artistic Style**: Specific medium (oil, digital, photo), lighting (cinematic, soft, neon), and mood.
+2. **Textural DNA**: Describe materials (silk, matte plastic, rough linen) with extreme precision.
+3. **Lighting & Environment**: Describe the background, light sources, and shadows.
+`;
+        outputSchema = `
+{
+  "style_keywords": ["keyword1", "keyword2"],
+  "visual_description": "A detailed 2-sentence description of the visual essence.",
+  "reverse_prompt_fragment": "The actual prompt snippet including style, textures, AND aesthetic rules."
+}
+`;
+    }
+
+    const systemPrompt = `
+You are a Professional Prompt Engineer specialized in Stable Diffusion and Midjourney.
+Analyze the provided reference images and reverse-engineer specific fragments of a Master Prompt.
+
+FOCUS MODE: ${mode.toUpperCase()}
+AREAS TO ANALYZE:
+${focusAreas}
+
+OUTPUT FORMAT:
+Return a JSON object with the following structure:
+${outputSchema}
+
+Output RAW JSON ONLY. No markdown blocks.
+`.trim();
+
+    let parts = [{ text: systemPrompt }];
+    processedImages.forEach((img, idx) => {
+        parts.push({ text: `Style Reference Image ${idx + 1}:` });
+        parts.push({
+            inline_data: { mime_type: img.mimeType, data: img.data }
+        });
+    });
+
+    const isGoogle = apiUrl.includes('googleapis.com');
+    const endpoint = isGoogle && !apiUrl.includes("key=") ? `${apiUrl}?key=${apiKey}` : apiUrl;
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: parts }] })
+    });
+
+    if (!response.ok) throw new Error(`Interrogation Failed: ${response.status}`);
+
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+    // Robust JSON extraction (removes Markdown code blocks and extra text)
+    let cleanedText = resultText.trim();
+    if (cleanedText.includes('```')) {
+        const matches = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (matches && matches[1]) {
+            cleanedText = matches[1].trim();
+        } else {
+            cleanedText = cleanedText.replace(/```json\n|```json|```/g, "").trim();
+        }
+    }
+
+    try {
+        return JSON.parse(cleanedText);
+    } catch (e) {
+        console.error("Failed to parse Gemini output as JSON:", resultText);
+        // Fallback: try finding first { and last }
+        try {
+            const startIdx = resultText.indexOf('{');
+            const endIdx = resultText.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1) {
+                return JSON.parse(resultText.substring(startIdx, endIdx + 1));
+            }
+        } catch (innerErr) {
+            console.error("Critical JSON Parse Failure:", innerErr);
+        }
+        return { error: "Failed to parse JSON", raw: resultText };
+    }
+};
+
+/**
+ * Merge user-defined base prompt with interrogated style fragment.
+ */
+export const mergePrompts = (basePrompt, interrogatedFragment) => {
+    return `${basePrompt}, ${interrogatedFragment}`.replace(/, ,/g, ',').trim();
 };

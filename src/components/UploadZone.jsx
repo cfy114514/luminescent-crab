@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, X, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
+const UploadZone = ({ images = [], onImagesChange, isProcessing, fixedLabel = null, className = "" }) => {
     const [isDragging, setIsDragging] = useState(false);
     const inputRef = useRef(null);
 
@@ -31,35 +31,21 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
 
     const detectLabelFromFilename = (filename) => {
         const lower = filename.toLowerCase();
-        // Front
         if (lower.includes('front') || lower.includes('正面')) return 'front';
-
-        // Back
         if (lower.includes('back') || lower.includes('rear') || lower.includes('背面')) return 'back';
-
-        // Top
         if (lower.includes('top') || lower.includes('flat') || lower.includes('顶')) return 'top_overhead';
-
-        // Inside
         if (lower.includes('inside') || lower.includes('inner') || lower.includes('lining') || lower.includes('内')) return 'inside';
-
-        // Detail
         if (lower.includes('detail') || lower.includes('texture') || lower.includes('macro') || lower.includes('细')) return 'detail';
-
-        // Angles
         if (lower.includes('angle') || lower.includes('斜')) {
             if (lower.includes('left') || lower.includes('左')) return 'angle_left';
             if (lower.includes('right') || lower.includes('右')) return 'angle_right';
-            return 'angle_front'; // Generic fallback if just 'angle'
+            return 'angle_front';
         }
-
-        // Sides
         if (lower.includes('side') || lower.includes('侧')) {
             if (lower.includes('left') || lower.includes('左')) return 'side_left';
             if (lower.includes('right') || lower.includes('右')) return 'side_right';
-            return 'side_left'; // Default fallback
+            return 'side_left';
         }
-
         return 'general';
     };
 
@@ -68,7 +54,7 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
         const newImageObjects = validFiles.map(file => ({
             id: Math.random().toString(36).substr(2, 9),
             file: file,
-            label: detectLabelFromFilename(file.name), // Auto-detect
+            label: fixedLabel || detectLabelFromFilename(file.name),
             preview: URL.createObjectURL(file)
         }));
         onImagesChange([...images, ...newImageObjects]);
@@ -100,7 +86,7 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
     ];
 
     return (
-        <div className="w-full h-full flex flex-col gap-4">
+        <div className={`w-full h-full flex flex-col gap-4 ${className}`}>
             <div
                 className={`
                     relative group cursor-pointer
@@ -123,7 +109,6 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
                     accept="image/*"
                     multiple
                     onChange={handleFileChange}
-                    aria-label="Upload Reference Images"
                 />
 
                 <div className="flex flex-col items-center justify-center text-center space-y-2">
@@ -138,18 +123,31 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
                         <p className="text-slate-300 text-sm font-medium">
                             {images.length === 0 ? "拖拽产品图片到这里" : "添加更多参考图"}
                         </p>
-                        <p className="text-slate-500 text-xs mt-1">支持多图上传 / JPG, PNG</p>
-                        <p className="text-yellow-500/80 text-[10px] mt-2 bg-yellow-500/10 px-2 py-1 rounded">
-                            * 提示：为获得准确的【背面/内部】生成，请务必上传实拍的背面和内饰参考图
+                        <p className="text-slate-500 text-xs mt-1">
+                            {fixedLabel ? `上传将自动标记为: ${fixedLabel}` : "支持多图上传 / JPG, PNG"}
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Thumbnails Grid */}
             {images.length > 0 && (
                 <div className="flex-1 overflow-y-auto min-h-[100px] custom-scrollbar">
-                    <p className="text-xs text-slate-400 mb-2 font-medium">为图片指定视角 (Label Views)</p>
+                    <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-slate-400 font-medium">
+                            {fixedLabel ? "已上传参考图" : "为图片指定视角 (Label Views)"}
+                        </p>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('确定要清空所有已上传的图片吗？')) {
+                                    onImagesChange([]);
+                                }
+                            }}
+                            className="text-[10px] flex items-center gap-1.5 px-2 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 transition-all font-bold"
+                        >
+                            <X className="w-3 h-3" /> 一键清空
+                        </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <AnimatePresence>
                             {images.map((img) => (
@@ -163,39 +161,33 @@ const UploadZone = ({ images = [], onImagesChange, isProcessing }) => {
                                     <div className="relative w-20 h-20 rounded overflow-hidden flex-shrink-0">
                                         <img
                                             src={img.preview}
-                                            alt="Reference Preview"
+                                            alt="Preview"
                                             className="w-full h-full object-cover"
                                         />
                                     </div>
 
                                     <div className="flex flex-col justify-between flex-1 py-1">
-                                        <select
-                                            id={`label-select-${img.id}`}
-                                            name={`label-select-${img.id}`}
-                                            value={img.label}
-                                            onChange={(e) => updateLabel(img.id, e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="bg-slate-900 border border-slate-600 text-xs text-white rounded px-2 py-1 outline-none focus:border-blue-500"
-                                            aria-label="Select Image View Label"
-                                            title="Assign View Label"
-                                        >
-                                            {labelOptions.map(opt => (
-                                                <option key={opt.value} value={opt.value}>
-                                                    {opt.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {!fixedLabel ? (
+                                            <select
+                                                value={img.label}
+                                                onChange={(e) => updateLabel(img.id, e.target.value)}
+                                                className="bg-slate-900 border border-slate-600 text-xs text-white rounded px-2 py-1 outline-none focus:border-blue-500"
+                                            >
+                                                {labelOptions.map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <div className="text-[10px] text-blue-400 font-bold uppercase tracking-widest bg-blue-400/10 px-2 py-1 rounded inline-block self-start">
+                                                Label: {img.label}
+                                            </div>
+                                        )}
 
                                         <div className="flex justify-end">
                                             {!isProcessing && (
                                                 <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        removeImage(img.id);
-                                                    }}
+                                                    onClick={(e) => { e.stopPropagation(); removeImage(img.id); }}
                                                     className="p-1.5 bg-slate-700 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition-colors"
-                                                    aria-label="Remove Image"
-                                                    title="Remove Image"
                                                 >
                                                     <X className="w-3 h-3" />
                                                 </button>
