@@ -1,8 +1,9 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { User2, MapPin, Shirt, Palette, Layers, Sparkles, Wand2, Info } from 'lucide-react';
+import React, { useState } from 'react';
+import { Layers, Eraser, Settings, ChevronDown, ChevronUp, User, Camera, Sparkles, Loader2 } from 'lucide-react';
 
-const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing, presets }) => {
+const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyleReferenceImage, outfitSuggestion, onAnalyzeStyle, isAnalyzing }) => {
+    const [isModelExpanded, setIsModelExpanded] = useState(true);
+
     const handleChange = (key, value) => {
         setConfig(prev => ({ ...prev, [key]: value }));
     };
@@ -11,7 +12,7 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing, presets }) => 
         <div className="w-full glass-panel rounded-2xl p-6 space-y-6 mt-6">
             <h3 className="text-xl font-semibold text-white flex items-center mb-4">
                 <span className="w-1 h-6 bg-purple-500 rounded-full mr-3" />
-                参数设置
+                抠图设置 (Cutout Settings)
             </h3>
 
             {/* Product Category Selection */}
@@ -42,505 +43,252 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing, presets }) => 
                 })()}
             </div>
 
-            {/* Model Selection */}
+            {/* Style Reference Image Upload */}
             <div className="space-y-2 pb-4 border-b border-slate-700/50">
-                <label htmlFor="model-select" className="text-sm text-green-400 flex items-center gap-2 font-medium">
-                    <Sparkles className="w-4 h-4" /> 生成模型 (AI Model)
+                <label className="text-sm text-amber-400 flex items-center gap-2 font-medium">
+                    <Sparkles className="w-4 h-4" /> 服装风格参考 (Style Reference - Optional)
                 </label>
-                <select
-                    id="model-select"
-                    name="model"
-                    title="Select AI Model"
-                    value={config.model || 'gemini-2.5-flash-image'}
-                    onChange={(e) => handleChange('model', e.target.value)}
-                    className="w-full bg-slate-900/50 border border-green-500/30 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-green-500/50 outline-none transition-all font-mono"
+                <p className="text-[10px] text-slate-400 italic">
+                    上传风格参考图可覆盖AI的服装建议（Upload a style reference to override AI outfit suggestions）
+                </p>
+
+                {styleReferenceImage ? (
+                    <div className="relative group">
+                        <img
+                            src={URL.createObjectURL(styleReferenceImage)}
+                            alt="Style Reference"
+                            className="w-full h-32 object-cover rounded-lg border border-amber-500/30"
+                        />
+                        <button
+                            onClick={() => setStyleReferenceImage(null)}
+                            className="absolute top-2 right-2 p-1.5 bg-red-500/80 rounded-full text-white hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                            title="Remove"
+                        >
+                            <span className="text-xs">×</span>
+                        </button>
+                    </div>
+                ) : (
+                    <label className="block cursor-pointer">
+                        <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                    setStyleReferenceImage(e.target.files[0]);
+                                }
+                            }}
+                        />
+                        <div className="border-2 border-dashed border-slate-700 rounded-lg p-4 text-center hover:border-amber-500/50 hover:bg-slate-800/30 transition-all">
+                            <Camera className="w-6 h-6 mx-auto mb-2 text-slate-500" />
+                            <span className="text-xs text-slate-400">点击上传风格参考</span>
+                        </div>
+                    </label>
+                )}
+
+                {/* Manual Style Analysis Button */}
+                <button
+                    onClick={onAnalyzeStyle}
+                    disabled={isAnalyzing}
+                    className={`
+                        w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2
+                        ${isAnalyzing
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg hover:shadow-amber-500/25'
+                        }
+                    `}
                 >
-                    <option value="gemini-2.5-flash-image">Gemini 2.5 Flash (Standard - Fast)</option>
-                    <option value="gemini-3-pro-image-preview">Gemini 3.0 Pro (Preview - High Quality)</option>
-                </select>
-                <p className="text-xs text-slate-500">
-                    * 3.0 Pro 处于预览阶段，可能生成较慢，但细节更丰富。
+                    {isAnalyzing ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>分析中...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles className="w-4 h-4" />
+                            <span>分析风格 (Analyze Style)</span>
+                        </>
+                    )}
+                </button>
+
+                {/* Show outfit suggestion if available */}
+                {outfitSuggestion && (
+                    <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <div className="text-xs font-bold text-amber-300 mb-1">AI服装建议:</div>
+                        <div className="text-[10px] text-amber-200/80">{outfitSuggestion.outfit_description}</div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                            {outfitSuggestion.style_keywords?.slice(0, 3).map((keyword, idx) => (
+                                <span key={idx} className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">
+                                    {keyword}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Model Selection (Full Restore) */}
+            <div className="space-y-4 pb-4 border-b border-slate-700/50">
+                <div
+                    className="flex justify-between items-center cursor-pointer group"
+                    onClick={() => setIsModelExpanded(!isModelExpanded)}
+                >
+                    <label className="text-sm text-purple-400 flex items-center gap-2 font-medium cursor-pointer">
+                        <User className="w-4 h-4" /> 模特设置 (Model Settings)
+                    </label>
+                    <div className="p-1 rounded-full hover:bg-slate-800 transition-colors">
+                        {isModelExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                        ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                        )}
+                    </div>
+                </div>
+
+                {isModelExpanded && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {/* Aspect Ratio & Engine */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-xs text-slate-400">比例 (Ratio)</label>
+                                <select
+                                    name="aspect_ratio"
+                                    value={config.aspect_ratio || '1:1'}
+                                    onChange={(e) => handleChange('aspect_ratio', e.target.value)}
+                                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-purple-500/50 outline-none"
+                                >
+                                    <option value="1:1">1:1 (Square)</option>
+                                    <option value="3:4">3:4 (Portrait)</option>
+                                    <option value="4:3">4:3 (Landscape)</option>
+                                    <option value="9:16">9:16 (Story)</option>
+                                    <option value="16:9">16:9 (Cinema)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs text-slate-400">生成模型 (Engine)</label>
+                                <select
+                                    name="model"
+                                    value={config.model}
+                                    onChange={(e) => handleChange('model', e.target.value)}
+                                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-purple-500/50 outline-none"
+                                >
+                                    <option value="gemini-2.5-flash-image">Gemini 2.5 Flash (Default)</option>
+                                    <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Experimental)</option>
+                                    <option value="gemini-3-pro-image-preview">Gemini 3 Pro (Image Preview)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Model Preset Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <button
+                                onClick={() => handleChange('modelId', '')}
+                                className={`
+                                    relative p-2 rounded-lg border text-left transition-all group overflow-hidden
+                                    ${!config.modelId
+                                        ? 'bg-purple-500/20 border-purple-500 ring-1 ring-purple-500'
+                                        : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'}
+                                `}
+                            >
+                                <div className="text-xs font-medium text-white mb-1">无模特</div>
+                                <div className="text-[10px] text-slate-400">纯产品图</div>
+                            </button>
+
+                            {presets?.models?.map(model => (
+                                <button
+                                    key={model.id}
+                                    onClick={() => handleChange('modelId', model.id)}
+                                    className={`
+                                        relative p-2 rounded-lg border text-left transition-all group overflow-hidden
+                                        ${config.modelId === model.id
+                                            ? 'bg-purple-500/20 border-purple-500 ring-1 ring-purple-500'
+                                            : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'}
+                                    `}
+                                >
+                                    <div className="flex justify-between items-start mb-1">
+                                        <div className="text-xs font-medium text-white">{model.name}</div>
+                                        {model.templateImage && (
+                                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 rounded border border-emerald-500/30" title="Uses fixed template base">
+                                                底图
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 truncate">{model.gender} / {model.ethnicity}</div>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Template Mode Indicator */}
+                        {(() => {
+                            const activeModel = presets?.models?.find(m => m.id === config.modelId);
+                            if (activeModel?.templateImage) {
+                                return (
+                                    <div className="text-[10px] bg-emerald-900/20 border border-emerald-500/20 text-emerald-300 p-2 rounded-lg flex gap-2 items-center">
+                                        <Camera className="w-3 h-3 flex-shrink-0" />
+                                        <span>
+                                            <b>模板底图模式已激活:</b> 将使用预设的 {activeModel.name} 底图（A图），仅替换帽子并重绘面部。身体与背景保持不变。
+                                        </span>
+                                    </div>
+                                );
+                            }
+                        })()}
+
+
+                    </div>
+                )}
+            </div>
+
+
+            {/* Creativity / Fidelity Control */}
+            <div className="space-y-3 pb-4 border-b border-slate-700/50">
+                <div className="flex justify-between items-center">
+                    <label className="text-sm text-pink-400 flex items-center gap-2 font-medium">
+                        <Sparkles className="w-4 h-4" /> 创造力 (Creativity)
+                    </label>
+                    <span className="text-xs text-pink-300 font-mono bg-pink-500/10 px-2 py-0.5 rounded">
+                        {config.creativity || 20}%
+                    </span>
+                </div>
+
+                <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={config.creativity !== undefined ? config.creativity : 20}
+                    onChange={(e) => handleChange('creativity', parseInt(e.target.value))}
+                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500 hover:accent-pink-400 transition-all"
+                />
+
+                <div className="flex justify-between text-[10px] text-slate-500 font-mono pt-1">
+                    <span>STRICT (0%)</span>
+                    <span>BALANCED (50%)</span>
+                    <span>WILD (100%)</span>
+                </div>
+
+                <p className="text-[10px] text-slate-400 italic">
+                    * Low: Fixes wrinkles/lighting but locks geometry.<br />
+                    * High: Invents new details and angles.
                 </p>
             </div>
 
 
-            {/* Style Selection (New) */}
-            <div className="space-y-3 pb-6 border-b border-slate-700/50">
-                <label className="text-sm text-purple-400 flex items-center gap-2 font-medium">
-                    <Wand2 className="w-4 h-4" /> 风格选择 (Style Preset)
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                    {presets?.styles?.map(style => (
-                        <button
-                            key={style.id}
-                            onClick={() => handleChange('styleId', style.id)}
-                            className={`
-                                relative p-3 rounded-xl border text-left transition-all group overflow-hidden
-                                ${config.styleId === style.id
-                                    ? 'bg-purple-600/20 border-purple-500 shadow-lg shadow-purple-500/10'
-                                    : 'bg-slate-900/40 border-slate-700 hover:border-slate-500'}
-                            `}
-                        >
-                            <div className={`text-xs font-bold ${config.styleId === style.id ? 'text-white' : 'text-slate-300'}`}>
-                                {style.name}
-                            </div>
-                            <div className="text-[10px] text-slate-500 mt-1 line-clamp-1 group-hover:line-clamp-none transition-all">
-                                {style.description}
-                            </div>
-                            {config.styleId === style.id && (
-                                <div className="absolute top-1 right-1">
-                                    <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
-                                </div>
-                            )}
-                        </button>
-                    ))}
-                    <button
-                        onClick={() => handleChange('styleId', null)}
-                        className={`
-                            p-3 rounded-xl border text-center transition-all
-                            ${!config.styleId
-                                ? 'bg-slate-700 border-slate-500 text-white'
-                                : 'bg-slate-900/40 border-slate-700 text-slate-500 hover:text-slate-300'}
-                        `}
-                    >
-                        <div className="text-xs font-bold">无预设 (None)</div>
-                    </button>
-                </div>
-                {config.styleId && (
-                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/10 flex items-start gap-2">
-                        <Info className="w-3 h-3 text-purple-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-[10px] text-purple-300/70 leading-relaxed italic">
-                            已自动应用“{presets.styles.find(s => s.id === config.styleId)?.name}”提示词合并逻辑。
+
+
+
+            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                <div className="flex items-start gap-3">
+                    <Eraser className="w-5 h-5 text-blue-400 mt-1" />
+                    <div>
+                        <h4 className="text-sm font-bold text-blue-300">智能抠图模式 (Smart Cutout)</h4>
+                        <p className="text-xs text-blue-200/70 mt-1">
+                            Current Mode: <b>High Precision Extraction</b>. <br />
+                            AI will extract the subject matching the selected category. Background will be removed.
                         </p>
                     </div>
-                )}
-            </div>
-
-            {/* View Selection Toggles */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Product Spec Toggle Group */}
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-500/20 rounded-full text-blue-400">
-                                <Layers className="w-4 h-4" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-white">产品规范套图</p>
-                                <p className="text-xs text-slate-400">选择需要生成的标准视角</p>
-                            </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer" title="Toggle Product Views">
-                            <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={config.includeProductViews}
-                                onChange={(e) => handleChange('includeProductViews', e.target.checked)}
-                                aria-label="Toggle Product Spec Views"
-                            />
-                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-
-                    {/* Sub-Selection Grid */}
-                    {config.includeProductViews && config.viewSelection && (
-                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-blue-500/20 pl-1">
-                            {[
-                                { k: 'front', l: '正面 (Front)' },
-                                { k: 'angle_front', l: '斜侧 (Angle)' },
-                                { k: 'back', l: '背面 (Back)' },
-                                { k: 'top', l: '顶视 (Top)' },
-                                { k: 'inside', l: '内饰 (Inside)' },
-                                { k: 'detail', l: '细节 (Detail)' }
-                            ].map(item => (
-                                <label key={item.k} className="flex items-center space-x-2 cursor-pointer group">
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config.viewSelection[item.k] ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800'}`}>
-                                        {config.viewSelection[item.k] && <div className="w-2 h-2 bg-white rounded-sm" />}
-                                    </div>
-                                    <input
-                                        type="checkbox"
-                                        className="hidden"
-                                        checked={config.viewSelection[item.k]}
-                                        onChange={(e) => {
-                                            const newSelection = { ...config.viewSelection, [item.k]: e.target.checked };
-                                            handleChange('viewSelection', newSelection);
-                                        }}
-                                        aria-label={`Select ${item.l}`}
-                                    />
-                                    <span className={`text-xs ${config.viewSelection[item.k] ? 'text-blue-200' : 'text-slate-500'} group-hover:text-blue-300 transition-colors`}>
-                                        {item.l}
-                                    </span>
-                                </label>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Model View Toggle Group */}
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-purple-500/20 rounded-full text-purple-400">
-                                <User2 className="w-4 h-4" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-white">模特展示图</p>
-                                <p className="text-xs text-slate-400">选择需要生成的模特视角</p>
-                            </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer" title="Toggle Model Views">
-                            <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={config.includeModelView}
-                                onChange={(e) => handleChange('includeModelView', e.target.checked)}
-                                aria-label="Toggle Model Views"
-                            />
-                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                        </label>
-                    </div>
-
-                    {/* Sub-Selection Grid (New) */}
-                    {config.includeModelView && config.modelViewSelection && (
-                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-purple-500/20 pl-1">
-                            {[
-                                { k: 'model_front', l: '正面 (Front)' },
-                                { k: 'model_angle', l: '斜侧 (Angle)' },
-                                { k: 'model_side', l: '侧面 (Side)' },
-                                { k: 'model_back', l: '背面 (Back)' },
-                                { k: 'model_lifestyle_hat', l: '生活-手扶帽檐' },
-                                { k: 'model_lifestyle_smile', l: '生活-低头微笑' },
-                                { k: 'model_lifestyle_backlook', l: '生活-回头侧望' },
-                                { k: 'model_lifestyle_sitting', l: '生活-坐姿造型' }
-                            ].map(item => (
-                                <label key={item.k} className="flex items-center space-x-2 cursor-pointer group">
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${config.modelViewSelection[item.k] ? 'bg-purple-500 border-purple-500' : 'border-slate-600 bg-slate-800'}`}>
-                                        {config.modelViewSelection[item.k] && <div className="w-2 h-2 bg-white rounded-sm" />}
-                                    </div>
-                                    <input
-                                        type="checkbox"
-                                        className="hidden"
-                                        checked={config.modelViewSelection[item.k]}
-                                        onChange={(e) => {
-                                            const newSelection = { ...config.modelViewSelection, [item.k]: e.target.checked };
-                                            handleChange('modelViewSelection', newSelection);
-                                        }}
-                                        aria-label={`Select ${item.l}`}
-                                    />
-                                    <span className={`text-xs ${config.modelViewSelection[item.k] ? 'text-purple-200' : 'text-slate-500'} group-hover:text-purple-300 transition-colors`}>
-                                        {item.l}
-                                    </span>
-                                </label>
-                            ))}
-                        </div>
-                    )}
                 </div>
             </div>
-
-            {/* Model Identity Preset */}
-            <div className="md:col-span-2 space-y-2">
-                <label htmlFor="model-preset-select" className="text-sm text-slate-400 flex items-center gap-2">
-                    <User2 className="w-4 h-4" /> 预设模特身份 (Named Model)
-                </label>
-                <select
-                    id="model-preset-select"
-                    name="modelId"
-                    value={config.modelId || ''}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        handleChange('modelId', val);
-                    }}
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-purple-500/50 outline-none transition-all"
-                >
-                    <option value="">-- 手动配置 (Manual) --</option>
-                    {presets?.models?.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                </select>
-                {config.modelId && (
-                    <p className="text-[10px] text-purple-400 italic">
-                        * 已应用预设模特：基础人种/性别选项已锁定以维持肖像一致性。
-                    </p>
-                )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Ethnicity */}
-                <div className="space-y-2">
-                    <label htmlFor="ethnicity-select" className="text-sm text-slate-400 flex items-center gap-2">
-                        <User2 className={`w-4 h-4 ${config.modelId ? 'opacity-30' : ''}`} />
-                        <span className={config.modelId ? 'opacity-30' : ''}>模特人种</span>
-                    </label>
-                    <select
-                        id="ethnicity-select"
-                        name="ethnicity"
-                        disabled={!!config.modelId}
-                        value={config.ethnicity}
-                        onChange={(e) => {
-                            handleChange('ethnicity', e.target.value);
-                            if (config.modelId) handleChange('modelId', '');
-                        }}
-                        className={`w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all ${config.modelId ? 'cursor-not-allowed opacity-50' : ''}`}
-                    >
-                        <option value="asian">亚洲 (Asian)</option>
-                        <option value="caucasian">欧美 (Caucasian)</option>
-                        <option value="african">非洲 (African)</option>
-                        <option value="latino">拉丁 (Latino)</option>
-                        <option value="middle_eastern">中东 (Middle Eastern)</option>
-                    </select>
-                </div>
-
-                {/* Gender */}
-                <div className="space-y-2">
-                    <label htmlFor="gender-select" className="text-sm text-slate-400 flex items-center gap-2">
-                        <User2 className={`w-4 h-4 ${config.modelId ? 'opacity-30' : ''}`} />
-                        <span className={config.modelId ? 'opacity-30' : ''}>性别</span>
-                    </label>
-                    <select
-                        id="gender-select"
-                        name="gender"
-                        disabled={!!config.modelId}
-                        value={config.gender}
-                        onChange={(e) => {
-                            handleChange('gender', e.target.value);
-                            if (config.modelId) handleChange('modelId', '');
-                        }}
-                        className={`w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500/50 outline-none transition-all ${config.modelId ? 'cursor-not-allowed opacity-50' : ''}`}
-                    >
-                        <option value="female">女性 (Female)</option>
-                        <option value="male">男性 (Male)</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* Scene */}
-            <div className="space-y-2">
-                <label htmlFor="scene-input" className="text-sm text-slate-400 flex items-center gap-2">
-                    <MapPin className="w-4 h-4" /> 场景 / 背景
-                </label>
-                <div className="relative">
-                    <input
-                        id="scene-input"
-                        name="scene"
-                        type="text"
-                        list="scene-options"
-                        value={config.scene || ''}
-                        onChange={(e) => handleChange('scene', e.target.value)}
-                        placeholder="选择预设或手动输入 (Select or Type)..."
-                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                        aria-label="Scene Selection"
-                    />
-                    <datalist id="scene-options">
-                        <option value="Minimalist Concrete Studio (极简水泥风)" />
-                        <option value="Modern Living Room (现代客厅)" />
-                        <option value="Sunny Beach (阳光沙滩)" />
-                        <option value="Urban Street (城市街头)" />
-                        <option value="Lush Park (自然公园)" />
-                        <option value="Luxury Boutique (高级精品店)" />
-                        <option value="Pure White Background (纯白背景)" />
-                    </datalist>
-                </div>
-            </div>
-
-            {/* Target Color (Palette) */}
-            <div className="space-y-2">
-                <label htmlFor="target-color-input" className="text-sm text-slate-400 flex items-center gap-2">
-                    <Palette className="w-4 h-4" /> 产品色调 (Target Color)
-                </label>
-                <div className="flex gap-3">
-                    <div className="relative w-12 h-10 flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 transition-colors">
-                        <input
-                            id="target-color-picker"
-                            name="targetColorPicker"
-                            type="color"
-                            value={config.targetColor || '#ffffff'}
-                            onChange={(e) => handleChange('targetColor', e.target.value)}
-                            className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer p-0 border-0"
-                            title="Pick Target Color"
-                            aria-label="Pick Target Color"
-                        />
-                    </div>
-                    <input
-                        id="target-color-input"
-                        name="targetColor"
-                        type="text"
-                        value={config.targetColor || ''}
-                        onChange={(e) => handleChange('targetColor', e.target.value)}
-                        placeholder="#FFFFFF or Red"
-                        className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-mono uppercase"
-                    />
-                </div>
-                <p className="text-[10px] text-slate-500">* 指令AI将产品材质重新染色为指定颜色 (保持原有纹理)</p>
-            </div>
-
-            {/* Clothing */}
-            <div className="space-y-2">
-                <label htmlFor="clothing-input" className="text-sm text-slate-400 flex items-center gap-2">
-                    <Shirt className="w-4 h-4" /> 服装风格
-                </label>
-                <input
-                    id="clothing-input"
-                    name="clothing"
-                    type="text"
-                    list="clothing-options"
-                    value={config.clothing || ''}
-                    onChange={(e) => handleChange('clothing', e.target.value)}
-                    placeholder="选择预设或手动输入..."
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                    aria-label="Clothing Style"
-                />
-                <datalist id="clothing-options">
-                    <option value="Casual Minimalist (休闲极简)" />
-                    <option value="Smart Business (商务通勤)" />
-                    <option value="Summer Vacation (度假风)" />
-                    <option value="Streetwear (街头潮流)" />
-                    <option value="Sportswear (运动风)" />
-                    <option value="Elegant Evening (优雅晚装)" />
-                </datalist>
-            </div>
-
-            {/* Hair Color */}
-            <div className="space-y-2">
-                <label htmlFor="hair-color-input" className="text-sm text-slate-400 flex items-center gap-2">
-                    <Palette className="w-4 h-4" /> 发色
-                </label>
-                <input
-                    id="hair-color-input"
-                    name="hairColor"
-                    type="text"
-                    list="hair-options"
-                    value={config.hairColor || ''}
-                    onChange={(e) => handleChange('hairColor', e.target.value)}
-                    placeholder="选择预设或手动输入..."
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                    aria-label="Hair Color"
-                />
-                <datalist id="hair-options">
-                    <option value="Dark Brown (深棕色)" />
-                    <option value="Black (黑色)" />
-                    <option value="Blonde (金发)" />
-                    <option value="Redhead (红发)" />
-                    <option value="Grey/Silver (银灰色)" />
-                    <option value="Pink Dyed (粉色染发)" />
-                    <option value="Blue Dyed (蓝色染发)" />
-                </datalist>
-            </div>
-
-            {/* Manual Prompt Override */}
-            <div className="space-y-2 pt-4 border-t border-slate-700/50">
-                <label htmlFor="custom-prompt-input" className="text-sm text-purple-400 flex items-center gap-2 font-medium">
-                    <Sparkles className="w-4 h-4" /> 附加提示词 (Custom Prompt)
-                </label>
-                <textarea
-                    id="custom-prompt-input"
-                    name="customPrompt"
-                    value={config.customPrompt || ''}
-                    onChange={(e) => handleChange('customPrompt', e.target.value)}
-                    placeholder="在此输入额外的 Prompt 指令 (将在最后拼接到提示词中)... 例如: 'Add intense rim lighting', 'Make it look like a sketch'"
-                    rows={3}
-                    className="w-full bg-slate-900/50 border border-purple-500/30 rounded-lg px-4 py-2.5 text-white placeholder-slate-600 focus:ring-2 focus:ring-purple-500/50 outline-none transition-all resize-y text-xs font-mono"
-                    aria-label="Custom Prompt Override"
-                />
-            </div>
-
-            {/* Advanced Settings Section */}
-            <div className="pt-4 border-t border-slate-700/50 space-y-4">
-                <details className="group">
-                    <summary className="flex items-center justify-between cursor-pointer list-none">
-                        <div className="flex items-center gap-2 text-sm font-bold text-slate-400 group-hover:text-white transition-colors">
-                            <Layers className="w-4 h-4" /> 高级生成参数 (Advanced Settings)
-                        </div>
-                        <div className="text-slate-500 group-open:rotate-180 transition-transform">
-                            <Layers className="w-4 h-4 ml-1 transform transition-transform" />
-                        </div>
-                    </summary>
-
-                    <div className="mt-4 space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
-                        {/* Thinking Level */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                                    <Sparkles className="w-3.5 h-3.5 text-blue-400" /> 思考深度 (Thinking Level)
-                                </label>
-                                <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
-                                    {['low', 'high'].map((level) => (
-                                        <button
-                                            key={level}
-                                            onClick={() => handleChange('thinkingLevel', level)}
-                                            className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${config.thinkingLevel === level
-                                                ? 'bg-blue-600 text-white shadow-lg'
-                                                : 'text-slate-500 hover:text-slate-300'
-                                                }`}
-                                        >
-                                            {level === 'high' ? 'HIGH (推荐)' : 'LOW'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <p className="text-[10px] text-slate-500 leading-relaxed">
-                                High模式下模型会进行深度逻辑推理，显著提升复杂指令的还原度和细节质量。
-                            </p>
-                        </div>
-
-                        {/* Image Size & Aspect Ratio Grid */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400">输出分辨率 (Image Size)</label>
-                                <select
-                                    value={config.imageSize || '1K'}
-                                    onChange={(e) => handleChange('imageSize', e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-1 focus:ring-blue-500 outline-none"
-                                >
-                                    <option value="1K">1K (Standard)</option>
-                                    <option value="2K">2K (High Def)</option>
-                                    <option value="4K">4K (Ultra HD)</option>
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400">构图比例 (Aspect Ratio)</label>
-                                <select
-                                    value={config.aspect_ratio || '1:1'}
-                                    onChange={(e) => handleChange('aspect_ratio', e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-1 focus:ring-blue-500 outline-none"
-                                >
-                                    <option value="1:1">1:1 (Square)</option>
-                                    <option value="16:9">16:9 (Cinema)</option>
-                                    <option value="9:16">9:16 (TikTik/Story)</option>
-                                    <option value="4:3">4:3 (Classic)</option>
-                                    <option value="3:4">3:4 (Portrait)</option>
-                                    <option value="2:3">2:3 (Photo)</option>
-                                    <option value="3:2">3:2 (Landscape)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Temperature Slider */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-slate-400">创意发散度 (Temperature)</label>
-                                <span className="text-[10px] font-mono text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">
-                                    {config.temperature?.toFixed(1) || '1.0'}
-                                </span>
-                            </div>
-                            <input
-                                type="range"
-                                min="0.0"
-                                max="2.0"
-                                step="0.1"
-                                value={config.temperature || 1.0}
-                                onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
-                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
-                            <div className="flex justify-between text-[8px] text-slate-600 font-bold uppercase tracking-tighter">
-                                <span>精确稳定 (Reliable)</span>
-                                <span>默认 (Default)</span>
-                                <span>充满变数 (Creative)</span>
-                            </div>
-                        </div>
-                    </div>
-                </details>
-            </div>
-        </div>
+        </div >
     );
 };
 

@@ -159,6 +159,47 @@ const ModelEditor = ({ presets, onSave }) => {
                             </div>
                         </div>
 
+                        {/* Template Image Upload Section (NEW) */}
+                        <div className="p-6 rounded-2xl bg-purple-500/5 border border-purple-500/20 space-y-4">
+                            <div className="flex items-center gap-2">
+                                <Info className="w-5 h-5 text-purple-400" />
+                                <h4 className="font-semibold text-purple-100">模特底图模板 (Template Base - A图)</h4>
+                            </div>
+                            <p className="text-xs text-slate-400">
+                                <b>操作指引：</b>上传一张该模特的半身/全身底图（A图）。生图时，系统将保留此图的身体和背景，仅替换帽子（B图）和进行面部重绘。
+                            </p>
+
+                            <div className="h-48">
+                                <UploadZone
+                                    images={selectedModel.templateImage ? [selectedModel.templateImage] : []}
+                                    onImagesChange={(files) => {
+                                        // Take the first file as the template
+                                        const file = files[0];
+                                        if (file) {
+                                            // Reader for base64 display/storage
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => {
+                                                handleUpdateModel(selectedId, { templateImage: reader.result });
+                                            };
+                                            reader.readAsDataURL(file);
+                                        } else {
+                                            handleUpdateModel(selectedId, { templateImage: null });
+                                        }
+                                    }}
+                                    maxFiles={1}
+                                    isProcessing={false}
+                                />
+                            </div>
+                            {selectedModel.templateImage && (
+                                <button
+                                    onClick={() => handleUpdateModel(selectedId, { templateImage: null })}
+                                    className="text-xs text-red-400 hover:text-red-300 underline"
+                                >
+                                    清除底图 (Remove Template)
+                                </button>
+                            )}
+                        </div>
+
                         {/* Model Interrogation Section - Focus on DNA Only */}
                         <div className="p-6 rounded-2xl bg-blue-500/5 border border-blue-500/20 space-y-4">
                             <div className="flex items-center justify-between">

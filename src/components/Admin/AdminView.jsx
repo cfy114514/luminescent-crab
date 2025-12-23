@@ -19,9 +19,9 @@ const AdminView = ({ onBack, presets, setPresets }) => {
 
     const tabs = [
         { id: 'categories', label: '产品分类管理', icon: Layout },
-        { id: 'styles', label: '风格预设管理', icon: Palette },
+        // { id: 'styles', label: '风格预设管理', icon: Palette },
         { id: 'models', label: '模特库管理', icon: User },
-        { id: 'viewpoints', label: '视角/机位配置', icon: Camera },
+        // { id: 'viewpoints', label: '视角/机位配置', icon: Camera },
     ];
 
     return (

@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import UploadZone from './components/UploadZone';
+import WorkflowRow from './components/WorkflowRow';
 import ResultGallery from './components/ResultGallery';
 import ConfigPanel from './components/ConfigPanel';
 import RequestInspector from './components/RequestInspector';
-import { generateImages, analyzeImages, mergePrompts } from './services/api';
-import { Sparkles, Loader2, Play, Code, Settings } from 'lucide-react';
+import { generateImages, analyzeImages, mergePrompts, analyzeHatStyleAndSuggestOutfit } from './services/api';
+import { Sparkles, Loader2, Play, Code, Settings, Trash2, Package } from 'lucide-react';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import RefinementChat from './components/RefinementChat';
 import AdminView from './components/Admin/AdminView';
+import ImageViewer from './components/ImageViewer';
 import defaultPresets from './config/presets.json';
 
 function App() {
@@ -17,6 +21,7 @@ function App() {
   const [visualProgress, setVisualProgress] = useState(0); // Smooth interpolated progress
   const [statusMessage, setStatusMessage] = useState(""); // Granular Status
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState(null); // Lightbox State
 
   // Load Presets from LocalStorage or default
   const [presets, setPresets] = useState(() => {
@@ -49,14 +54,24 @@ function App() {
   });
 
   const handleSavePresets = (newPresets) => {
-    setPresets(newPresets);
-    localStorage.setItem('product_ai_presets', JSON.stringify(newPresets));
+    try {
+      setPresets(newPresets);
+      localStorage.setItem('product_ai_presets', JSON.stringify(newPresets));
+    } catch (err) {
+      console.error("Storage Error:", err);
+      if (err.name === 'QuotaExceededError' || err.toString().includes('exceeded')) {
+        alert("保存失败：图片太大，超过了浏览器存储限制！\n请尝试压缩图片或使用更小的分辨率（建议 1MB 以内）。\n(Save Failed: Image too large for local storage)");
+        // Revert state if needed, or just let the user know their last action wasn't persisted.
+      } else {
+        alert(`保存失败: ${err.message}`);
+      }
+    }
   };
 
-  // Store multiple files for context
-  const [referenceImages, setReferenceImages] = useState([]);
+  // Store files mapped by view ID: { 'p_front': File, 'm_side': File, ... }
+  const [viewImages, setViewImages] = useState({});
 
-  // Mock Progress Interpolation
+  // ... (Progress Interpolation - Unchanged) ...
   React.useEffect(() => {
     let interval;
     if (isProcessing && progress.total > 0) {
@@ -92,95 +107,204 @@ function App() {
   const [lastPayload, setLastPayload] = useState(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
+  const [history, setHistory] = useState([]); // Store generations groups
+
   const [config, setConfig] = useState({
+    creativity: 20, // Default to Low Creativity (Strict Mode)
     model: 'gemini-2.5-flash-image', // Default Model
     ethnicity: 'asian',
     gender: 'female',
-    targetColor: '',
-    clothing: '',
-    hairColor: '',
-    customPrompt: '',
-    // Advanced
     categoryId: 'hat', // Default Category
-    styleId: '',
     modelId: '', // Model Identity Preset
     thinkingLevel: 'high',
     imageSize: '1K',
     aspect_ratio: '1:1',
     temperature: 1.0,
     description: '',
-    includeProductViews: true, // Default: Generate Spec
-    includeModelView: true,     // Default: Generate Model
-    viewSelection: {
-      front: true,
-      angle_front: true,
-      back: true,
-      top: true,
-      inside: true,
-      detail: true
-    },
-    modelViewSelection: {
-      model_front: true,
-      model_angle: true,
-      model_side: true,
-      model_back: true,
-      model_lifestyle_hat: true,
-      model_lifestyle_smile: true,
-      model_lifestyle_backlook: true,
-      model_lifestyle_sitting: true
-    }
   });
 
-  const handleAnalyze = async () => {
-    if (referenceImages.length === 0) {
-      setError("请先上传参考图片");
+  const [styleReferenceImage, setStyleReferenceImage] = useState(null);
+  const [outfitSuggestion, setOutfitSuggestion] = useState(null);
+
+  // Slots Definition with Dynamic Labels
+  const VIEW_SLOTS = React.useMemo(() => {
+    // Check if current model has a template
+    const activeModel = presets.models?.find(m => m.id === config.modelId);
+    const hasTemplate = !!activeModel?.templateImage;
+
+    return [
+      // Product Views
+      { id: 'p_front', label: '正视图 (Front)', type: 'product' },
+      { id: 'p_angle', label: '侧角图 (Angle)', type: 'product' },
+      { id: 'p_back', label: '后视图 (Back)', type: 'product' },
+      { id: 'p_top', label: '俯视图 (Top)', type: 'product' },
+      { id: 'p_detail', label: '细节图 (Detail)', type: 'product' },
+      { id: 'p_inside', label: '内部结构 (Inside)', type: 'product' },
+
+      // Model Views (Dynamic)
+      { id: 'm_front', label: hasTemplate ? '帽子素材 (输入A)' : '模特-正面 (Front)', type: 'model' },
+      { id: 'm_side', label: hasTemplate ? '帽子素材 (输入B)' : '模特-侧面 (Side)', type: 'model' },
+      { id: 'm_back', label: hasTemplate ? '帽子素材 (输入C)' : '模特-背面 (Back)', type: 'model' },
+      { id: 'm_pose1', label: hasTemplate ? '帽子素材 (输入D)' : '模特-展示1 (Pose A)', type: 'model' },
+      { id: 'm_pose2', label: hasTemplate ? '帽子素材 (输入E)' : '模特-展示2 (Pose B)', type: 'model' },
+      { id: 'm_pose3', label: hasTemplate ? '帽子素材 (输入F)' : '模特-展示3 (Pose C)', type: 'model' },
+      { id: 'm_back_angle', label: hasTemplate ? '帽子素材 (输入G)' : '模特-背对斜侧 (Back Angle)', type: 'model' },
+    ];
+  }, [config.modelId, presets.models]);
+
+  // Slot Labels for outfit analysis
+  const SLOT_LABELS = {
+    'p_front': 'Product Front',
+    'p_angle': 'Product Angle',
+    'p_back': 'Product Back',
+    'p_top': 'Product Top',
+    'p_detail': 'Product Detail',
+    'p_inside': 'Product Inside',
+  };
+
+  /* --- Manual Style Analysis --- */
+  const handleAnalyzeStyle = async () => {
+    // Collect product images
+    const productImages = Object.entries(viewImages)
+      .filter(([key]) => key.startsWith('p_'))
+      .map(([key, file]) => ({ file, label: SLOT_LABELS[key] || key }));
+
+    if (productImages.length === 0) {
+      setError("请先上传至少一张产品图 (Please upload at least one product image)");
       return;
     }
 
     setIsAnalyzing(true);
-    setStatusMessage("AI is reading topology...");
     setError(null);
+    setStatusMessage("分析风格中... (Analyzing style...)");
+
     try {
-      const analysisText = await analyzeImages(referenceImages);
-      setConfig(prev => ({
-        ...prev,
-        description: analysisText
-      }));
+      const outfitData = await analyzeHatStyleAndSuggestOutfit(
+        productImages,
+        styleReferenceImage
+      );
+
+      setOutfitSuggestion(outfitData);
+      console.log("[Manual Style Analysis]", outfitData);
+      setStatusMessage("风格分析完成 (Style analysis complete)");
+
+      // Clear status after brief display
+      setTimeout(() => setStatusMessage(""), 2000);
     } catch (err) {
-      console.error("Analysis Error:", err);
-      setError(`分析失败: ${err.message}`);
+      console.error("[Style Analysis Error]:", err);
+      setError(`风格分析失败: ${err.message}`);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  /* --- Single Generation Logic --- */
+  const handleSingleGenerate = async (slotId, overrideConfig = null) => {
+    const file = viewImages[slotId];
+    if (!file) return;
+
+    // Model Check
+    if (slotId.startsWith('m_') && !config.modelId) {
+      setError("请先选择一个模特 (Please select a Model Identity)");
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+    setStatusMessage(`Generating single view: ${slotId}...`);
+
+    // Prepare Single Map
+    const singleMap = { [slotId]: file };
+    const finalConfig = overrideConfig ? { ...config, ...overrideConfig } : config;
+
+    try {
+      const data = await generateImages(
+        singleMap,
+        finalConfig,
+        (key, resultData, current, total) => {
+          setResults(prev => ({ ...prev, [key]: resultData }));
+        },
+        (status) => setStatusMessage(status),
+        presets
+      );
+      setResults(prev => ({ ...prev, ...data.images }));
+    } catch (err) {
+      console.error("Single Gen Error:", err);
+      setError(`生成失败: ${err.message}`);
+    } finally {
+      setIsProcessing(false);
       setStatusMessage("");
     }
   };
 
+  const handleClearAll = () => {
+    if (window.confirm("确定要清空所有上传的素材和生成结果吗？(Are you sure you want to clear all?)")) {
+      setViewImages({});
+      setResults({});
+      setError(null);
+      setProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (!results || Object.keys(results).length === 0) return;
+
+    const zip = new JSZip();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const zipFilename = `ProductAI_Set_${timestamp}.zip`;
+
+    const folder = zip.folder("generated_images");
+
+    Object.entries(results).forEach(([id, data]) => {
+      if (data && data.url) {
+        const imgData = data.url.split(',')[1];
+        if (imgData) {
+          folder.file(`${id}_${data.label}.png`, imgData, { base64: true });
+        }
+      }
+    });
+
+    const content = await zip.generateAsync({ type: "blob" });
+    saveAs(content, zipFilename);
+  };
+
   const handleGenerate = async () => {
-    if (referenceImages.length === 0) {
-      setError("请至少上传一张参考图片");
+    // Check if at least one file is uploaded
+    const inputFiles = Object.values(viewImages);
+    if (inputFiles.length === 0) {
+      setError("请至少上传一张参考图片 (Please upload at least one image)");
       return;
     }
 
-    if (!config.includeProductViews && !config.includeModelView) {
-      setError("请至少选择一种生成类型（产品套图 或 模特展示）");
+    // Model Check
+    const hasModelImages = Object.keys(viewImages).some(k => k.startsWith('m_'));
+    if (hasModelImages && !config.modelId) {
+      setError("上传了模特展示图，请先选择一个模特 (Model View detected. Please select a Model Identity)");
       return;
     }
 
     setIsProcessing(true);
     setStatusMessage("Initializing engines...");
     setResults({});
-    setProgress({ current: 0, total: 1 }); // Start with dummy total to trigger UI
+
+    // Total steps = number of uploaded images
+    const totalSteps = inputFiles.length;
+    setProgress({ current: 0, total: totalSteps });
     setVisualProgress(0);
     setError(null);
 
-    // Note: Prompt merging is now primarily handled inside generateImages/getViewPrompt
-    // using the provided presets to ensure both style and viewpoint consistency.
     const finalConfig = { ...config };
+
+    // Inject outfit suggestion if already analyzed
+    if (outfitSuggestion) {
+      finalConfig.outfitSuggestion = outfitSuggestion.outfit_description;
+    }
 
     try {
       // Pass callback for real-time updates AND Status
+      // NOTE: generateImages signature will change to accept (viewImagesMap, config, ...)
       const data = await generateImages(
-        referenceImages,
+        viewImages,
         finalConfig,
         (key, resultData, current, total) => {
           setResults(prev => ({ ...prev, [key]: resultData }));
@@ -192,6 +316,13 @@ function App() {
         presets
       );
 
+      const newBatch = {
+        id: Date.now(),
+        images: { ...data.images },
+        config: { ...finalConfig }
+      };
+
+      setHistory(prev => [newBatch, ...prev]);
       setResults(prev => ({ ...prev, ...data.images }));
       setLastPayload(data.payload);
 
@@ -202,6 +333,56 @@ function App() {
       setIsProcessing(false);
       setProgress({ current: 0, total: 0 });
       setStatusMessage("");
+    }
+  };
+
+  const handleRefinementCommand = async (command) => {
+    const match = command.match(/第(\d+)组.*第(\d+)张.*第(\d+)组.*第(\d+)张/);
+    if (match) {
+      const [_, targetBatchIdx, targetImgIdx, refBatchIdx, refImgIdx] = match.map(Number);
+
+      // Find in history (newest first, so index starts from 0)
+      // Usually user counts 1-based, newest to oldest
+      const targetBatch = history[targetBatchIdx - 1];
+      const refBatch = history[refBatchIdx - 1];
+
+      if (targetBatch && refBatch) {
+        const targetKeys = Object.keys(targetBatch.images);
+        const refKeys = Object.keys(refBatch.images);
+
+        const targetKey = targetKeys[targetImgIdx - 1];
+        const refKey = refKeys[refImgIdx - 1];
+
+        const refImgData = refBatch.images[refKey]?.url;
+
+        if (targetKey && refImgData) {
+          // Prepare style reference
+          const base64Data = refImgData.split(',')[1];
+          const mimeType = refImgData.split(';')[0].split(':')[1];
+
+          const override = {
+            styleReferences: {
+              [targetKey]: { data: base64Data, mimeType: mimeType }
+            }
+          };
+
+          await handleSingleGenerate(targetKey, override);
+        } else {
+          setError("未找到指定的图片索引 (Image index not found)");
+        }
+      } else {
+        setError("未找到指定的批组 (Batch index not found)");
+      }
+    } else {
+      // Simple case: "让这张更自然" -> apply to last generated
+      setStatusMessage("正在优化最新生成的图像...");
+      const lastBatch = history[0];
+      if (lastBatch) {
+        const firstKey = Object.keys(lastBatch.images)[0];
+        if (firstKey) {
+          await handleSingleGenerate(firstKey, { customPrompt: command });
+        }
+      }
     }
   };
 
@@ -225,7 +406,7 @@ function App() {
           <Sparkles className="text-white w-6 h-6" />
         </div>
         <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-          ProductAI 智能图生图
+          ProductAI 智能图生图 (Cutout Studio)
         </span>
         <button
           onClick={() => setIsAdminMode(true)}
@@ -248,129 +429,119 @@ function App() {
       )}
 
       {/* Main Split Layout */}
-      <main className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-[calc(100vh-140px)] min-h-[600px]">
+      <main className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-140px)] min-h-[600px]">
 
-        {/* Left Column: Input + Config */}
-        <div className="flex flex-col gap-6 h-full overflow-y-auto pr-2 custom-scrollbar">
-
-          {/* Upload Section */}
-          <div className="flex-1 min-h-[300px]">
-            <UploadZone
-              images={referenceImages}
-              onImagesChange={(newImages) => {
-                setReferenceImages(newImages);
-                setResults(null);
-                setError(null);
-              }}
-              isProcessing={isProcessing}
-            />
-          </div>
-
-          {/* Config Section */}
-          <div className="flex-shrink-0">
-            <ConfigPanel
-              config={config}
-              setConfig={setConfig}
-              onAnalyze={handleAnalyze}
-              isAnalyzing={isAnalyzing}
-              presets={presets}
-            />
-          </div>
+        {/* Left Column: Config Panel Only (1/3) */}
+        <div className="w-full lg:col-span-1 flex-shrink-0 h-full overflow-y-auto custom-scrollbar lg:sticky lg:top-0 space-y-6">
+          <ConfigPanel
+            config={config}
+            setConfig={setConfig}
+            onAnalyze={() => { }}
+            isAnalyzing={isAnalyzing}
+            presets={presets}
+            styleReferenceImage={styleReferenceImage}
+            setStyleReferenceImage={setStyleReferenceImage}
+            outfitSuggestion={outfitSuggestion}
+            onAnalyzeStyle={handleAnalyzeStyle}
+          />
         </div>
 
-        {/* Right Column: Results + Action */}
-        <div className="flex flex-col gap-6 h-full">
+        {/* Right Column: Workflow Rows (2/3) */}
+        <div className="lg:col-span-2 flex-1 h-full flex flex-col gap-6">
 
-          {/* Results Display */}
-          <div className="flex-1 bg-slate-900/20 rounded-2xl border border-white/5 p-6 overflow-y-auto custom-scrollbar relative">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-slate-300">生成结果 (Output Gallery)</h3>
-              <div className="flex items-center gap-3">
-                {isProcessing && progress.total > 0 && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-32 h-2 bg-slate-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 transition-all duration-300 ease-out"
-                        style={{ width: `${visualProgress}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-blue-400 font-mono">
-                      {Math.round(visualProgress)}%
-                    </span>
-                  </div>
-                )}
-                {lastPayload && (
-                  <button
-                    onClick={() => setIsInspectorOpen(true)}
-                    className="flex items-center space-x-2 text-xs text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20"
-                    title="View API Payload"
-                    aria-label="Open Request Inspector"
-                  >
-                    <Code className="w-3 h-3" />
-                  </button>
-                )}
+          {/* Action Bar (Global) */}
+          <div className="flex-shrink-0 flex gap-4">
+            {/* Clear Button */}
+            <button
+              onClick={handleClearAll}
+              disabled={isProcessing || Object.keys(viewImages).length === 0}
+              className="p-4 rounded-xl font-bold text-lg bg-slate-800 text-slate-400 hover:bg-red-500/20 hover:text-red-400 border border-transparent hover:border-red-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="清空所有 (Clear All)"
+            >
+              <Trash2 className="w-6 h-6" />
+            </button>
 
-                {/* Supervisor Toggle */}
-                <button
-                  onClick={() => setConfig(prev => ({ ...prev, supervisorEnabled: !prev.supervisorEnabled }))}
-                  className={`
-                    flex items-center space-x-2 text-xs transition-colors px-3 py-1.5 rounded-full border
-                    ${config.supervisorEnabled
-                      ? 'bg-green-500/20 text-green-300 border-green-500/30 hover:bg-green-500/30'
-                      : 'bg-slate-700/50 text-slate-400 border-slate-600 hover:bg-slate-700'}
-                  `}
-                  title="Toggle AI Quality Supervisor"
-                  aria-label={config.supervisorEnabled ? "Disable AI Supervisor" : "Enable AI Supervisor"}
-                >
-                  <div className={`w-2 h-2 rounded-full ${config.supervisorEnabled ? 'bg-green-400' : 'bg-slate-500'}`} />
-                  <span>{config.supervisorEnabled ? 'Supervisor: ON' : 'Supervisor: OFF'}</span>
-                </button>
-              </div>
-            </div>
-            <ResultGallery results={results} config={config} />
-          </div>
+            {/* Generate Button */}
+            <button
+              onClick={handleGenerate}
+              disabled={isProcessing || Object.keys(viewImages).length === 0}
+              className={`
+                    flex-1 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 flex items-center justify-center gap-3
+                    ${isProcessing || Object.keys(viewImages).length === 0
+                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:scale-[1.02] hover:shadow-blue-500/25 text-white cursor-pointer'}
+                `}
+            >
+              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-6 h-6 fill-current" />}
+              <span>{isProcessing ? "Processing..." : "全部生成 (Generate All)"}</span>
+            </button>
 
-          {/* Action Button */}
-          <div className="flex-shrink-0">
+            {/* Download Button */}
+            <button
+              onClick={handleDownloadAll}
+              disabled={!results || Object.keys(results).length === 0}
+              className="p-4 rounded-xl font-bold text-lg bg-slate-800 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 border border-transparent hover:border-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="打包下载 (Download All)"
+            >
+              <Package className="w-6 h-6" />
+            </button>
+
             {error && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-200 text-sm text-center">
+              <div className="px-4 py-2 bg-red-500/10 border border-red-500/50 rounded-lg text-red-200 text-sm flex items-center">
                 {error}
               </div>
             )}
+          </div>
 
-            <button
-              onClick={handleGenerate}
-              disabled={isProcessing || referenceImages.length === 0}
-              className={`
-                w-full py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 flex items-center justify-center gap-3
-                ${isProcessing || referenceImages.length === 0
-                  ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:scale-[1.02] hover:shadow-blue-500/25 text-white cursor-pointer'}
-              `}
-            >
-              {isProcessing ? (
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="text-sm">{statusMessage || "Processing..."}</span>
-                  </div>
-                  {progress.total > 0 && (
-                    <span className="text-[10px] opacity-50 mt-1 font-mono tracking-widest">
-                      {/* Optional: Add a subtle loading bar inside the button too or just text */}
-                      PROCESSING {progress.current}/{progress.total}
-                    </span>
-                  )}
+          {/* Workflow Rows List */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar pb-20 space-y-3">
+            {history.length > 0 && (
+              <div className="flex items-center gap-2 mb-4">
+                <div className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-bold rounded border border-blue-500/30">
+                  HISTORY (Total Groups: {history.length})
                 </div>
-              ) : (
-                <>
-                  <Play className="w-6 h-6 fill-current" />
-                  开始生成 (Generate)
-                </>
-              )}
-            </button>
+                <span className="text-slate-500 text-xs">- Latest generation belongs to Group 1</span>
+              </div>
+            )}
+
+            {VIEW_SLOTS.map((slot, idx) => (
+              <WorkflowRow
+                key={slot.id}
+                slot={slot}
+                index={idx}
+                file={viewImages[slot.id]}
+                result={results?.[slot.id]}
+                isProcessing={isProcessing}
+                onUpload={(id, file) => setViewImages(prev => ({ ...prev, [id]: file }))}
+                onRemove={(id) => setViewImages(prev => {
+                  const next = { ...prev };
+                  delete next[id];
+                  return next;
+                })}
+                onGenerate={handleSingleGenerate}
+                onZoom={(url) => setZoomedImage(url)}
+              />
+            ))}
+
+            {Object.keys(viewImages).length === 0 && (
+              <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-700/50 rounded-xl bg-slate-800/20 text-slate-500 gap-4">
+                <Sparkles className="w-12 h-12 opacity-20" />
+                <p>Start by uploading an image into any slot above.</p>
+              </div>
+            )}
           </div>
         </div>
       </main>
+
+      {/* Refinement Chat Tool */}
+      <RefinementChat onCommand={handleRefinementCommand} />
+
+      {/* Image Viewer Lightbox */}
+      <ImageViewer
+        isOpen={!!zoomedImage}
+        imageUrl={zoomedImage}
+        onClose={() => setZoomedImage(null)}
+      />
     </div>
   );
 }
