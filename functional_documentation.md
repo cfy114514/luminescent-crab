@@ -27,7 +27,7 @@
 *   **功能**: `ModelEditor`, `StyleEditor`, `ViewpointEditor` & `getViewPrompt`
 *   **角色**: "Modular Scene Compositor" (模块化场景合成器)
 *   **核心逻辑**:
-    *   **Tri-Modular Splicing (三元拼装)**: 提示词由 **Identity (身份)** + **Composition (构图)** + **Artistic Style (风格)** 三部分模块化拼接。
+    *   **Quad-Modular Splicing (四元拼装)**: 提示词由 **Category (品类)** + **Identity (身份)** + **Composition (构图)** + **Artistic Style (风格)** 四部分模块化拼接。
     *   **Auto-Sync Logic**: 系统启动时自动对比 `presets.json`。若发现新的系统预置（如新增的模特视角），将自动合并至用户的本地存储中，确保平滑升级。
     *   **Refined Lifestyle Poses**: 生活姿势已精准细化为：手扶帽檐 (Hat)、低头微笑 (Smile)、回头侧望 (Look back)、坐姿造型 (Sitting)。每个机位均支持独立逆向提取与生成。
     *   **Identity DNA Extraction**: 专门针对模特的五官、肤温、发质进行 AI 逆向，侧重物理身份的唯一性。
@@ -35,6 +35,15 @@
     *   **Pose/Angle Lock**: 通过 `viewpoints` 模式专门提取构图与镜头焦距参数，不受艺术风格或模特长相干扰。
     *   **Framing Standard (构图规范)**: 模特展示全机位强制采用 **Strict Half-Body (Waist-Up)**。拍摄距离固定为 **2.0m**，镜头焦距锁定为 **85mm 等效**，确保头部至腰部区域的构图比例在所有视角下保持高度一致。
     *   **Mutual Exclusion (互斥规则)**: 启用模特预设后，强制禁用 UI 中的基础人种/性别选项，确保 AI 提示词的一致性。
+    *   **Category Logic**: 新增 `productCategories` 模块，支持定义品类专属的 "Prompt Constraint" (如鞋类的鞋底结构约束)，并支持用户手动管理或通过 AI 逆向提取。
+
+### 1.5 Structural Analyst (逆向层)
+*   **功能**: `interrogateImages` (mode: 'product_category')
+*   **角色**: "Structural Analyst" (结构分析师)
+*   **核心逻辑**:
+    *   **Context-Aware Trace (语境感知)**: 根据用户定义的品类名称 (Context Label)，定向分析参考图的物理结构 (Structural Integrity) 和组件语法 (Component Syntax)。
+    *   **Constraint Generation**: 自动生成“结构约束段落”，指导生成器“必须保留什么”和“必须遵守什么几何规则”。
+
 ### 1.3 Supervisor Persona (质检层)
 *   **功能**: `assessImageQuality` (api.js)
 *   **角色**: "Product Quality Control Specialist" (产品质检专家)
@@ -60,7 +69,7 @@
 
 ### 3.1配置面板 (`ConfigPanel.jsx`)
 *   **UI 简化**: 移除了手动的 "Feature Description" (特征描述) 输入框，完全由 AI 后台自动完成。
-*   **预设系统**: 新增“风格”、“机位”、“模特”三位一体的预设管理后台 (Admin Mode)。
+*   **预设系统**: 新增“品类”、“风格”、“机位”、“模特”四位一体的预设管理后台 (Admin Mode)。支持品类结构的逆向分析 (Reverse Engineering)。
 *   **交互优化**: 目前仅保留 "生成模型"、"视角选择"、"模特设置" 等高频控制项。
 
 ## 4. 已知限制与待办

@@ -23,13 +23,18 @@ function App() {
     const saved = localStorage.getItem('product_ai_presets');
     const initial = saved ? JSON.parse(saved) : defaultPresets;
 
-    // Sync logic: Ensure new default viewpoints/styles are added even if user has saved data
+    // Sync logic: Ensure new default viewpoints/styles/categories are added even if user has saved data
     const syncedViewpoints = [...initial.viewpoints];
     defaultPresets.viewpoints.forEach(dv => {
       if (!syncedViewpoints.find(v => v.id === dv.id)) {
         syncedViewpoints.push(dv);
       }
     });
+
+    // 1. Sync Product Categories (New Feature)
+    // Only initialize if 'productCategories' is undefined (first run). 
+    // If it exists but is empty (user deleted all), respect that.
+    const syncedCategories = initial.productCategories || defaultPresets.productCategories || [];
 
     // Remove legacy one-off lifestyle attempts to avoid clutter
     const legacyIds = ['model_lifestyle', 'model_lifestyle_walking', 'model_lifestyle_leaning'];
@@ -38,7 +43,8 @@ function App() {
     return {
       ...initial,
       viewpoints: finalViewpoints,
-      models: initial.models || []
+      models: initial.models || [],
+      productCategories: syncedCategories
     };
   });
 
@@ -95,6 +101,7 @@ function App() {
     hairColor: '',
     customPrompt: '',
     // Advanced
+    categoryId: 'hat', // Default Category
     styleId: '',
     modelId: '', // Model Identity Preset
     thinkingLevel: 'high',

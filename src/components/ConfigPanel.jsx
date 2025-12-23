@@ -14,6 +14,34 @@ const ConfigPanel = ({ config, setConfig, onAnalyze, isAnalyzing, presets }) => 
                 参数设置
             </h3>
 
+            {/* Product Category Selection */}
+            <div className="space-y-2 pb-4 border-b border-slate-700/50">
+                <label htmlFor="category-select" className="text-sm text-emerald-400 flex items-center gap-2 font-medium">
+                    <Layers className="w-4 h-4" /> 产品品类 (Product Category)
+                </label>
+                <select
+                    id="category-select"
+                    name="categoryId"
+                    value={config.categoryId || ''}
+                    onChange={(e) => handleChange('categoryId', e.target.value)}
+                    className="w-full bg-slate-900/50 border border-emerald-500/30 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all font-mono"
+                >
+                    {presets?.productCategories?.map(cat => (
+                        <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                        </option>
+                    ))}
+                </select>
+                {config.categoryId && (() => {
+                    const activeCat = presets?.productCategories?.find(c => c.id === config.categoryId);
+                    return activeCat ? (
+                        <p className="text-[10px] text-slate-500 mt-1 italic">
+                            * {activeCat.description}
+                        </p>
+                    ) : null;
+                })()}
+            </div>
+
             {/* Model Selection */}
             <div className="space-y-2 pb-4 border-b border-slate-700/50">
                 <label htmlFor="model-select" className="text-sm text-green-400 flex items-center gap-2 font-medium">

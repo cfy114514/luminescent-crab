@@ -12,11 +12,13 @@ import {
 import StyleEditor from './StyleEditor';
 import ViewpointEditor from './ViewpointEditor';
 import ModelEditor from './ModelEditor';
+import CategoryEditor from './CategoryEditor';
 
 const AdminView = ({ onBack, presets, setPresets }) => {
-    const [activeTab, setActiveTab] = useState('styles');
+    const [activeTab, setActiveTab] = useState('categories');
 
     const tabs = [
+        { id: 'categories', label: '产品分类管理', icon: Layout },
         { id: 'styles', label: '风格预设管理', icon: Palette },
         { id: 'models', label: '模特库管理', icon: User },
         { id: 'viewpoints', label: '视角/机位配置', icon: Camera },
@@ -74,6 +76,9 @@ const AdminView = ({ onBack, presets, setPresets }) => {
                         animate={{ opacity: 1, x: 0 }}
                         className="max-w-6xl mx-auto"
                     >
+                        {activeTab === 'categories' && (
+                            <CategoryEditor presets={presets} onSave={setPresets} />
+                        )}
                         {activeTab === 'styles' && (
                             <StyleEditor presets={presets} onSave={setPresets} />
                         )}

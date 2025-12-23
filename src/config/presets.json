@@ -139,5 +139,25 @@
             "referenceImages": []
         }
     ],
-    "models": []
+    "models": [],
+    "productCategories": [
+        {
+            "id": "hat",
+            "name": "Hat (帽子)",
+            "description": "Headwear, caps, and beanies. Focus on brim and crown texture.",
+            "promptConstraint": "Ensure the hat shape is maintained. Focus on material texture (cotton, wool, straw)."
+        },
+        {
+            "id": "bag",
+            "name": "Bag (包袋)",
+            "description": "Handbags, backpacks, and totes. Focus on structure and material.",
+            "promptConstraint": "Maintain the bag's structure (rigid or slouchy). Emphasize leather/fabric grain and hardware details."
+        },
+        {
+            "id": "shoe",
+            "name": "Shoe (鞋履)",
+            "description": "Sneakers, boots, and heels. Focus on silhouette and sole details.",
+            "promptConstraint": "Keep the shoe silhouette accurate. Highlight sole texture and upper material."
+        }
+    ]
 }

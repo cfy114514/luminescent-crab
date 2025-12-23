@@ -32,6 +32,13 @@ const getViewPrompt = (viewType, config, availableLabels = [], taskKey = '', pre
     // 3. Fetch Model Preset (if selected)
     const selectedModel = presets?.models?.find(m => m.id === config.modelId);
 
+    // 4. Fetch Product Category (NEW)
+    const selectedCategory = presets?.productCategories?.find(c => c.id === config.categoryId);
+    const categoryConstraint = selectedCategory ? `
+CATEGORY CONSTRAINT (${selectedCategory.name}):
+${selectedCategory.promptConstraint}
+` : "";
+
     // Helper to merge base + interrogated + viewpoint + model prompts
     const styleBase = selectedStyle ? selectedStyle.basePrompt : "";
     const styleAI = selectedStyle ? selectedStyle.interrogatedPrompt : "";
@@ -85,6 +92,7 @@ STRICT PROTOCOL (USER DEFINED):
 9. **LOGO CONSISTENCY**: For products with logos, maintain Uniform Logo Size and Position relative to the product body across all generated views (保持Logo大小及位置统一).
 10. **COMPOSITION ANCHOR**: ${orchestratedBase}
 11. **AESTHETIC STYLE**: ${orchestratedAI}
+${categoryConstraint}
 `;
 
     // Inject JSON Topology if present (Parsed or Raw)
@@ -960,7 +968,7 @@ OUTPUT JSON FORMAT (Raw JSON only):
  * @param {Array} imageObjects 
  * @returns {Promise<Object>} Interrogation results (style, prompt, description)
  */
-export const interrogateImages = async (imageObjects, mode = 'styles') => {
+export const interrogateImages = async (imageObjects, mode = 'styles', contextLabel = '') => {
     const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
     const apiUrl = import.meta.env.VITE_API_URL_INTERROGATOR ||
         (import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('gemini-3-pro-image-preview', 'gemini-2.0-flash-exp') : '');
@@ -1009,6 +1017,19 @@ export const interrogateImages = async (imageObjects, mode = 'styles') => {
   "composition_ratio": "e.g., 70% subject coverage, centered",
   "reverse_prompt_fragment": "The prompt snippet defining THE COMPOSITION, POSE, AND ANGLE ONLY.",
   "visual_description": "Describing the framing and camera logic."
+}
+`;
+    } else if (mode === 'product_category') {
+        const categoryName = contextLabel || "Product";
+        focusAreas = `
+1. **Structural Integrity**: Define the rigid shape rules for a "${categoryName}".
+2. **Material Logic**: Common materials and textures specific to this category.
+3. **Component Syntax**: Mandatory parts (e.g., for a shoe: sole, upper, tongue; for a bag: handle, strap, body).
+`;
+        outputSchema = `
+{
+  "visual_description": "General description of the category archetype.",
+  "promptConstraint": "A strict instruction paragraph defining the GEOMETRY, STRUCTURE, and MANDATORY COMPONENTS of a '${categoryName}'. Focus on what MUST exist and what MUST NOT change."
 }
 `;
     } else {
