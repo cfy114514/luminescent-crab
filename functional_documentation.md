@@ -12,6 +12,7 @@
     *   **Label Authority (标签权威)**: 严格信任用户提供的标签 (如 "Front View")。若用户标记为正面，即使 AI 认为是侧面，也必须按正面拓扑处理。
     *   **Material Unification (材质统一)**: 交叉比对所有参考图，忽略单张图的光照差异，输出唯一的 `primary_material` 和 `primary_color_unified`，确保生成一致性。
     *   **Anti-Hallucination (反脑补)**: 明确忽略吊牌 (Hang Tags)、价格签、防盗扣等非产品元素。
+    *   **Style & Outfit Suggestion (风格与穿搭)**: 新增 `analyzeHatStyleAndSuggestOutfit`，基于帽子视觉特征通过 AI (Gemini Flash 2.0) 自动推导 `outfit_description`, `style_keywords` 和 `color_palette`，用于生成 Lifestyle 场景的上下文。
 
 ### 1.2 Generator Persona (生成层)
 *   **功能**: `getViewPrompt` (api.js)
@@ -44,6 +45,14 @@
     *   **Context-Aware Trace (语境感知)**: 根据用户定义的品类名称 (Context Label)，定向分析参考图的物理结构 (Structural Integrity) 和组件语法 (Component Syntax)。
     *   **Constraint Generation**: 自动生成“结构约束段落”，指导生成器“必须保留什么”和“必须遵守什么几何规则”。
 
+### 1.6 Super-Resolution Engine (超分引擎)
+*   **功能**: `upscaleImage` (api.js)
+*   **角色**: "Image Enhancement Specialist" (图像增强专家)
+*   **核心逻辑**:
+    *   **Gemini 3 Pro Backend**: 利用 Gemini 3 Pro 的多模态能力进行图像超分辨率处理。
+    *   **Resolution Targets**: 支持 1K (1024x1024), 2K (2048x2048), 4K (4096x4096) 目标分辨率。
+    *   **Details Preservation**: 专注于提升纹理细节清晰度，同时保持原始图像的结构和光影不变。
+
 ### 1.3 Supervisor Persona (质检层)
 *   **功能**: `assessImageQuality` (api.js)
 *   **角色**: "Product Quality Control Specialist" (产品质检专家)
@@ -71,6 +80,13 @@
 *   **UI 简化**: 移除了手动的 "Feature Description" (特征描述) 输入框，完全由 AI 后台自动完成。
 *   **预设系统**: 新增“品类”、“风格”、“机位”、“模特”四位一体的预设管理后台 (Admin Mode)。支持品类结构的逆向分析 (Reverse Engineering)。
 *   **交互优化**: 目前仅保留 "生成模型"、"视角选择"、"模特设置" 等高频控制项。
+
+### 3.2 超分面板 (`SuperResolutionPanel.jsx`)
+*   **功能**: 独立的批量图片超分辨率工具。
+*   **特性**:
+    *   **Batch Processing**: 支持多图批量上传与队列处理。
+    *   **Format Handling**: 自动打包 (Zip) 下载或单张下载。
+    *   **Visual Feedback**: 提供原图与处理后图片的对比预览及进度指示。
 
 ## 4. 已知限制与待办
 *   **NanoBanana 适配**: 目前主要针对 Gemini 模型优化，NanoBanana 适配器尚未完全同步最新的 Prompt 逻辑。

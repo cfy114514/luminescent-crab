@@ -1304,3 +1304,102 @@ Output RAW JSON ONLY. No markdown blocks.
 export const mergePrompts = (basePrompt, interrogatedFragment) => {
     return `${basePrompt}, ${interrogatedFragment}`.replace(/, ,/g, ',').trim();
 };
+
+/**
+ * Super-Resolution / Upscaling using Gemini 3 Pro
+ * @param {File} imageFile - The image to upscale
+ * @param {string} targetResolution - Target resolution (1K, 2K, 4K)
+ * @param {Object} config - Configuration object with API settings
+ * @returns {Promise<string>} - Upscaled image URL
+ */
+export const upscaleImage = async (imageFile, targetResolution, config) => {
+    const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
+
+    // Force use of Gemini 3 Pro for upscaling
+    const apiUrl = import.meta.env.VITE_NANOBANANA_API_URL
+        ? import.meta.env.VITE_NANOBANANA_API_URL.replace(/gemini-[^:]+/, 'gemini-3-pro-image-preview')
+        : '';
+
+    if (!apiKey || !apiUrl) throw new Error("Missing API Key for upscaling");
+
+    // Convert image to base64
+    const base64Info = await fileToBase64(imageFile);
+
+    // Resolution mapping
+    const resolutionMap = {
+        '1K': '1024x1024',
+        '2K': '2048x2048',
+        '4K': '4096x4096'
+    };
+
+    const targetSize = resolutionMap[targetResolution] || '2048x2048';
+
+    const prompt = `Upscale this image to ${targetSize} resolution while preserving all details, composition, and elements exactly as they are. 
+
+CRITICAL REQUIREMENTS:
+1. Do NOT change the composition or crop
+2. Do NOT add or remove any elements
+3. Do NOT alter colors or lighting significantly
+4. ONLY increase the resolution and enhance fine details
+5. Preserve all textures, patterns, and structures exactly
+
+This is a pure upscaling task - maintain 100% fidelity to the original image content.`;
+
+    const endpoint = apiUrl.includes("key=") ? apiUrl : `${apiUrl}?key=${apiKey}`;
+
+    const payload = {
+        contents: [{
+            parts: [
+                { text: prompt },
+                {
+                    inline_data: {
+                        mime_type: base64Info.mimeType,
+                        data: base64Info.data
+                    }
+                }
+            ]
+        }],
+        generationConfig: {
+            temperature: 0.1, // Very low temperature for minimal creativity
+            topP: 0.8
+        }
+    };
+
+    console.log("[Upscaler] Sending upscale request for", targetResolution);
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Upscaler] API Error:", response.status, errorText);
+        throw new Error(`Upscaling Failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("[Upscaler] Response structure:", Object.keys(data));
+    console.log("[Upscaler] Candidates:", data.candidates);
+
+    if (data.candidates && data.candidates[0]) {
+        console.log("[Upscaler] First candidate content:", data.candidates[0].content);
+        console.log("[Upscaler] Content parts:", data.candidates[0].content?.parts);
+        console.log("[Upscaler] Parts JSON:", JSON.stringify(data.candidates[0].content?.parts, null, 2));
+    }
+
+    // Extract image from response
+    const generatedImage = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+
+    if (!generatedImage) {
+        console.error("[Upscaler] No image in response. Full data:", data);
+        throw new Error("No image returned from upscaling API");
+    }
+
+    const upscaledDataUrl = `data:${generatedImage.inlineData.mimeType};base64,${generatedImage.inlineData.data}`;
+
+    console.log("[Upscaler] Upscaling complete");
+
+    return upscaledDataUrl;
+};

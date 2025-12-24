@@ -117,7 +117,7 @@ function App() {
     categoryId: 'hat', // Default Category
     modelId: '', // Model Identity Preset
     thinkingLevel: 'high',
-    imageSize: '1K',
+    imageSize: '2K',
     aspect_ratio: '1:1',
     temperature: 1.0,
     description: '',

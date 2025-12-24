@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Layers, Eraser, Settings, ChevronDown, ChevronUp, User, Camera, Sparkles, Loader2 } from 'lucide-react';
+import SuperResolutionPanel from './SuperResolutionPanel';
 
 const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyleReferenceImage, outfitSuggestion, onAnalyzeStyle, isAnalyzing }) => {
     const [isModelExpanded, setIsModelExpanded] = useState(true);
+    const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
 
     const handleChange = (key, value) => {
         setConfig(prev => ({ ...prev, [key]: value }));
@@ -41,6 +43,27 @@ const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyle
                         </p>
                     ) : null;
                 })()}
+            </div>
+
+            {/* Resolution Selector */}
+            <div className="space-y-2 pb-4 border-b border-slate-700/50">
+                <label htmlFor="resolution-select" className="text-sm text-cyan-400 flex items-center gap-2 font-medium">
+                    <Settings className="w-4 h-4" /> 输出分辨率 (Output Resolution)
+                </label>
+                <select
+                    id="resolution-select"
+                    name="imageSize"
+                    value={config.imageSize || '2K'}
+                    onChange={(e) => handleChange('imageSize', e.target.value)}
+                    className="w-full bg-slate-900/50 border border-cyan-500/30 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-cyan-500/50 outline-none transition-all font-mono"
+                >
+                    <option value="1K">1K (1024×1024)</option>
+                    <option value="2K">2K (2048×2048) - 推荐</option>
+                    <option value="4K">4K (4096×4096)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 italic">
+                    * 更高分辨率会提升细节，但生成时间更长
+                </p>
             </div>
 
             {/* Style Reference Image Upload */}
@@ -275,6 +298,26 @@ const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyle
 
 
 
+
+            {/* Advanced Features Section */}
+            <div className="space-y-2 pb-4 border-b border-slate-700/50">
+                <button
+                    onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
+                    className="w-full flex items-center justify-between text-sm text-purple-400 hover:text-purple-300 transition-colors font-medium"
+                >
+                    <div className="flex items-center gap-2">
+                        <Settings className="w-4 h-4" />
+                        <span>高级功能 (Advanced Features)</span>
+                    </div>
+                    {isAdvancedExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+
+                {isAdvancedExpanded && (
+                    <div className="mt-4 p-4 bg-slate-900/30 rounded-lg border border-purple-500/20">
+                        <SuperResolutionPanel config={config} />
+                    </div>
+                )}
+            </div>
 
             <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
                 <div className="flex items-start gap-3">
