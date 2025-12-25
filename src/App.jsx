@@ -1,114 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import WorkflowRow from './components/WorkflowRow';
-import ResultGallery from './components/ResultGallery';
 import ConfigPanel from './components/ConfigPanel';
 import RequestInspector from './components/RequestInspector';
-import { generateImages, analyzeImages, mergePrompts, analyzeHatStyleAndSuggestOutfit } from './services/api';
-import { Sparkles, Loader2, Play, Code, Settings, Trash2, Package } from 'lucide-react';
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
+import { Sparkles, Loader2, Play, Settings, Trash2, Package } from 'lucide-react';
+
 import RefinementChat from './components/RefinementChat';
 import AdminView from './components/Admin/AdminView';
 import ImageViewer from './components/ImageViewer';
-import defaultPresets from './config/presets.json';
+
+// Hooks
+import { usePresets } from './hooks/usePresets';
+import { useOutfits } from './hooks/useOutfits';
+import { useImageGeneration } from './hooks/useImageGeneration';
 
 function App() {
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState(null);
-  const [error, setError] = useState(null);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [visualProgress, setVisualProgress] = useState(0); // Smooth interpolated progress
-  const [statusMessage, setStatusMessage] = useState(""); // Granular Status
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [zoomedImage, setZoomedImage] = useState(null); // Lightbox State
-
-  // Load Presets from LocalStorage or default
-  const [presets, setPresets] = useState(() => {
-    const saved = localStorage.getItem('product_ai_presets');
-    const initial = saved ? JSON.parse(saved) : defaultPresets;
-
-    // Sync logic: Ensure new default viewpoints/styles/categories are added even if user has saved data
-    const syncedViewpoints = [...initial.viewpoints];
-    defaultPresets.viewpoints.forEach(dv => {
-      if (!syncedViewpoints.find(v => v.id === dv.id)) {
-        syncedViewpoints.push(dv);
-      }
-    });
-
-    // 1. Sync Product Categories (New Feature)
-    // Only initialize if 'productCategories' is undefined (first run). 
-    // If it exists but is empty (user deleted all), respect that.
-    const syncedCategories = initial.productCategories || defaultPresets.productCategories || [];
-
-    // Remove legacy one-off lifestyle attempts to avoid clutter
-    const legacyIds = ['model_lifestyle', 'model_lifestyle_walking', 'model_lifestyle_leaning'];
-    const finalViewpoints = syncedViewpoints.filter(v => !legacyIds.includes(v.id));
-
-    return {
-      ...initial,
-      viewpoints: finalViewpoints,
-      models: initial.models || [],
-      productCategories: syncedCategories
-    };
-  });
-
-  const handleSavePresets = (newPresets) => {
-    try {
-      setPresets(newPresets);
-      localStorage.setItem('product_ai_presets', JSON.stringify(newPresets));
-    } catch (err) {
-      console.error("Storage Error:", err);
-      if (err.name === 'QuotaExceededError' || err.toString().includes('exceeded')) {
-        alert("保存失败：图片太大，超过了浏览器存储限制！\n请尝试压缩图片或使用更小的分辨率（建议 1MB 以内）。\n(Save Failed: Image too large for local storage)");
-        // Revert state if needed, or just let the user know their last action wasn't persisted.
-      } else {
-        alert(`保存失败: ${err.message}`);
-      }
-    }
-  };
-
-  // Store files mapped by view ID: { 'p_front': File, 'm_side': File, ... }
+  // 1. Core Config State (UI State)
   const [viewImages, setViewImages] = useState({});
-
-  // ... (Progress Interpolation - Unchanged) ...
-  React.useEffect(() => {
-    let interval;
-    if (isProcessing && progress.total > 0) {
-      // Calculate real percentage
-      const realPercent = (progress.current / progress.total) * 100;
-
-      // Calculate "Next Step" target (fake it 'til you make it)
-      // If we are at step 0, aim for 80% of step 1 (approx 15-20% global)
-      // If we are at step 1, aim for 80% of step 2...
-      const stepSize = 100 / progress.total;
-      const targetFakePercent = Math.min(realPercent + (stepSize * 0.8), 99);
-
-      interval = setInterval(() => {
-        setVisualProgress(prev => {
-          // If we are far behind real status (e.g. jumped from 0 to 1), catch up fast
-          if (prev < realPercent) {
-            return prev + (realPercent - prev) * 0.2;
-          }
-          // Otherwise creep slowly towards the fake target
-          if (prev < targetFakePercent) {
-            return prev + 0.1; // Slow creep
-          }
-          return prev;
-        });
-      }, 50); // Update every 50ms
-    } else if (!isProcessing) {
-      setVisualProgress(0);
-    }
-    return () => clearInterval(interval);
-  }, [isProcessing, progress]);
-
-  // Inspector State
-  const [lastPayload, setLastPayload] = useState(null);
-  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
-
-  const [history, setHistory] = useState([]); // Store generations groups
-
   const [config, setConfig] = useState({
     creativity: 20, // Default to Low Creativity (Strict Mode)
     model: 'gemini-2.5-flash-image', // Default Model
@@ -122,12 +29,43 @@ function App() {
     temperature: 1.0,
     description: '',
   });
-
   const [styleReferenceImage, setStyleReferenceImage] = useState(null);
-  const [outfitSuggestion, setOutfitSuggestion] = useState(null);
 
-  // Slots Definition with Dynamic Labels
-  const VIEW_SLOTS = React.useMemo(() => {
+  // UI Toggles
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState(null);
+
+  // 2. Custom Hooks
+  const { presets, savePresets } = usePresets();
+  const {
+    outfitSuggestion,
+    isAnalyzing,
+    analysisError,
+    analysisStatus,
+    analyzeStyle
+  } = useOutfits();
+
+  const {
+    isProcessing,
+    results,
+    error: genError,
+    visualProgress,
+    statusMessage: genStatusMessage,
+    history,
+    lastPayload,
+    generateAll,
+    generateSingle,
+    downloadAll,
+    clearAll
+  } = useImageGeneration(presets);
+
+  // Derived Status Display
+  const displayStatus = isAnalyzing ? analysisStatus : genStatusMessage;
+  const displayError = analysisError || genError;
+
+  // 3. Computed Slots
+  const VIEW_SLOTS = useMemo(() => {
     // Check if current model has a template
     const activeModel = presets.models?.find(m => m.id === config.modelId);
     const hasTemplate = !!activeModel?.templateImage;
@@ -152,235 +90,39 @@ function App() {
     ];
   }, [config.modelId, presets.models]);
 
-  // Slot Labels for outfit analysis
-  const SLOT_LABELS = {
-    'p_front': 'Product Front',
-    'p_angle': 'Product Angle',
-    'p_back': 'Product Back',
-    'p_top': 'Product Top',
-    'p_detail': 'Product Detail',
-    'p_inside': 'Product Inside',
-  };
-
-  /* --- Manual Style Analysis --- */
-  const handleAnalyzeStyle = async () => {
-    // Collect product images
-    const productImages = Object.entries(viewImages)
-      .filter(([key]) => key.startsWith('p_'))
-      .map(([key, file]) => ({ file, label: SLOT_LABELS[key] || key }));
-
-    if (productImages.length === 0) {
-      setError("请先上传至少一张产品图 (Please upload at least one product image)");
-      return;
-    }
-
-    setIsAnalyzing(true);
-    setError(null);
-    setStatusMessage("分析风格中... (Analyzing style...)");
-
-    try {
-      const outfitData = await analyzeHatStyleAndSuggestOutfit(
-        productImages,
-        styleReferenceImage
-      );
-
-      setOutfitSuggestion(outfitData);
-      console.log("[Manual Style Analysis]", outfitData);
-      setStatusMessage("风格分析完成 (Style analysis complete)");
-
-      // Clear status after brief display
-      setTimeout(() => setStatusMessage(""), 2000);
-    } catch (err) {
-      console.error("[Style Analysis Error]:", err);
-      setError(`风格分析失败: ${err.message}`);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  /* --- Single Generation Logic --- */
-  const handleSingleGenerate = async (slotId, overrideConfig = null) => {
-    const file = viewImages[slotId];
-    if (!file) return;
-
-    // Model Check
-    if (slotId.startsWith('m_') && !config.modelId) {
-      setError("请先选择一个模特 (Please select a Model Identity)");
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-    setStatusMessage(`Generating single view: ${slotId}...`);
-
-    // Prepare Single Map
-    const singleMap = { [slotId]: file };
-    const finalConfig = overrideConfig ? { ...config, ...overrideConfig } : config;
-
-    try {
-      const data = await generateImages(
-        singleMap,
-        finalConfig,
-        (key, resultData, current, total) => {
-          setResults(prev => ({ ...prev, [key]: resultData }));
-        },
-        (status) => setStatusMessage(status),
-        presets
-      );
-      setResults(prev => ({ ...prev, ...data.images }));
-    } catch (err) {
-      console.error("Single Gen Error:", err);
-      setError(`生成失败: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setStatusMessage("");
-    }
-  };
-
-  const handleClearAll = () => {
-    if (window.confirm("确定要清空所有上传的素材和生成结果吗？(Are you sure you want to clear all?)")) {
-      setViewImages({});
-      setResults({});
-      setError(null);
-      setProgress({ current: 0, total: 0 });
-    }
-  };
-
-  const handleDownloadAll = async () => {
-    if (!results || Object.keys(results).length === 0) return;
-
-    const zip = new JSZip();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const zipFilename = `ProductAI_Set_${timestamp}.zip`;
-
-    const folder = zip.folder("generated_images");
-
-    Object.entries(results).forEach(([id, data]) => {
-      if (data && data.url) {
-        const imgData = data.url.split(',')[1];
-        if (imgData) {
-          folder.file(`${id}_${data.label}.png`, imgData, { base64: true });
-        }
-      }
-    });
-
-    const content = await zip.generateAsync({ type: "blob" });
-    saveAs(content, zipFilename);
-  };
-
-  const handleGenerate = async () => {
-    // Check if at least one file is uploaded
-    const inputFiles = Object.values(viewImages);
-    if (inputFiles.length === 0) {
-      setError("请至少上传一张参考图片 (Please upload at least one image)");
-      return;
-    }
-
-    // Model Check
-    const hasModelImages = Object.keys(viewImages).some(k => k.startsWith('m_'));
-    if (hasModelImages && !config.modelId) {
-      setError("上传了模特展示图，请先选择一个模特 (Model View detected. Please select a Model Identity)");
-      return;
-    }
-
-    setIsProcessing(true);
-    setStatusMessage("Initializing engines...");
-    setResults({});
-
-    // Total steps = number of uploaded images
-    const totalSteps = inputFiles.length;
-    setProgress({ current: 0, total: totalSteps });
-    setVisualProgress(0);
-    setError(null);
-
-    const finalConfig = { ...config };
-
-    // Inject outfit suggestion if already analyzed
-    if (outfitSuggestion) {
-      finalConfig.outfitSuggestion = outfitSuggestion.outfit_description;
-    }
-
-    try {
-      // Pass callback for real-time updates AND Status
-      // NOTE: generateImages signature will change to accept (viewImagesMap, config, ...)
-      const data = await generateImages(
-        viewImages,
-        finalConfig,
-        (key, resultData, current, total) => {
-          setResults(prev => ({ ...prev, [key]: resultData }));
-          setProgress({ current, total });
-        },
-        (status) => {
-          setStatusMessage(status); // Real-time text update
-        },
-        presets
-      );
-
-      const newBatch = {
-        id: Date.now(),
-        images: { ...data.images },
-        config: { ...finalConfig }
-      };
-
-      setHistory(prev => [newBatch, ...prev]);
-      setResults(prev => ({ ...prev, ...data.images }));
-      setLastPayload(data.payload);
-
-    } catch (err) {
-      console.error("Global Generation Error:", err);
-      setError(`生成失败: ${err.message}`);
-    } finally {
-      setIsProcessing(false);
-      setProgress({ current: 0, total: 0 });
-      setStatusMessage("");
-    }
-  };
-
+  // 4. Handlers
   const handleRefinementCommand = async (command) => {
     const match = command.match(/第(\d+)组.*第(\d+)张.*第(\d+)组.*第(\d+)张/);
     if (match) {
       const [_, targetBatchIdx, targetImgIdx, refBatchIdx, refImgIdx] = match.map(Number);
-
-      // Find in history (newest first, so index starts from 0)
-      // Usually user counts 1-based, newest to oldest
       const targetBatch = history[targetBatchIdx - 1];
       const refBatch = history[refBatchIdx - 1];
 
       if (targetBatch && refBatch) {
         const targetKeys = Object.keys(targetBatch.images);
         const refKeys = Object.keys(refBatch.images);
-
         const targetKey = targetKeys[targetImgIdx - 1];
         const refKey = refKeys[refImgIdx - 1];
-
         const refImgData = refBatch.images[refKey]?.url;
 
         if (targetKey && refImgData) {
-          // Prepare style reference
           const base64Data = refImgData.split(',')[1];
           const mimeType = refImgData.split(';')[0].split(':')[1];
-
           const override = {
             styleReferences: {
               [targetKey]: { data: base64Data, mimeType: mimeType }
             }
           };
-
-          await handleSingleGenerate(targetKey, override);
-        } else {
-          setError("未找到指定的图片索引 (Image index not found)");
+          await generateSingle(targetKey, viewImages, config, override);
         }
-      } else {
-        setError("未找到指定的批组 (Batch index not found)");
       }
     } else {
-      // Simple case: "让这张更自然" -> apply to last generated
-      setStatusMessage("正在优化最新生成的图像...");
+      // Simple refinement
       const lastBatch = history[0];
       if (lastBatch) {
         const firstKey = Object.keys(lastBatch.images)[0];
         if (firstKey) {
-          await handleSingleGenerate(firstKey, { customPrompt: command });
+          await generateSingle(firstKey, viewImages, config, { customPrompt: command });
         }
       }
     }
@@ -423,7 +165,7 @@ function App() {
           <AdminView
             onBack={() => setIsAdminMode(false)}
             presets={presets}
-            setPresets={handleSavePresets}
+            setPresets={savePresets}
           />
         </div>
       )}
@@ -436,13 +178,13 @@ function App() {
           <ConfigPanel
             config={config}
             setConfig={setConfig}
-            onAnalyze={() => { }}
             isAnalyzing={isAnalyzing}
             presets={presets}
             styleReferenceImage={styleReferenceImage}
             setStyleReferenceImage={setStyleReferenceImage}
             outfitSuggestion={outfitSuggestion}
-            onAnalyzeStyle={handleAnalyzeStyle}
+            onAnalyzeStyle={() => analyzeStyle(viewImages, styleReferenceImage)}
+            onAnalyze={() => { }} // Legacy prop, safe to ignore or remove if unused in ConfigPanel
           />
         </div>
 
@@ -453,7 +195,7 @@ function App() {
           <div className="flex-shrink-0 flex gap-4">
             {/* Clear Button */}
             <button
-              onClick={handleClearAll}
+              onClick={() => clearAll(setViewImages)}
               disabled={isProcessing || Object.keys(viewImages).length === 0}
               className="p-4 rounded-xl font-bold text-lg bg-slate-800 text-slate-400 hover:bg-red-500/20 hover:text-red-400 border border-transparent hover:border-red-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="清空所有 (Clear All)"
@@ -463,7 +205,7 @@ function App() {
 
             {/* Generate Button */}
             <button
-              onClick={handleGenerate}
+              onClick={() => generateAll(viewImages, config, outfitSuggestion)}
               disabled={isProcessing || Object.keys(viewImages).length === 0}
               className={`
                     flex-1 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 flex items-center justify-center gap-3
@@ -473,12 +215,12 @@ function App() {
                 `}
             >
               {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-6 h-6 fill-current" />}
-              <span>{isProcessing ? "Processing..." : "全部生成 (Generate All)"}</span>
+              <span>{isProcessing ? `Running... ${displayStatus}` : "全部生成 (Generate All)"}</span>
             </button>
 
             {/* Download Button */}
             <button
-              onClick={handleDownloadAll}
+              onClick={downloadAll}
               disabled={!results || Object.keys(results).length === 0}
               className="p-4 rounded-xl font-bold text-lg bg-slate-800 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 border border-transparent hover:border-blue-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="打包下载 (Download All)"
@@ -486,9 +228,9 @@ function App() {
               <Package className="w-6 h-6" />
             </button>
 
-            {error && (
+            {displayError && (
               <div className="px-4 py-2 bg-red-500/10 border border-red-500/50 rounded-lg text-red-200 text-sm flex items-center">
-                {error}
+                {displayError}
               </div>
             )}
           </div>
@@ -512,13 +254,14 @@ function App() {
                 file={viewImages[slot.id]}
                 result={results?.[slot.id]}
                 isProcessing={isProcessing}
+                progress={visualProgress} // Use interpolated visual progress
                 onUpload={(id, file) => setViewImages(prev => ({ ...prev, [id]: file }))}
                 onRemove={(id) => setViewImages(prev => {
                   const next = { ...prev };
                   delete next[id];
                   return next;
                 })}
-                onGenerate={handleSingleGenerate}
+                onGenerate={(id) => generateSingle(id, viewImages, config)}
                 onZoom={(url) => setZoomedImage(url)}
               />
             ))}

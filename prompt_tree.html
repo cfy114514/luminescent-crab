@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Prompt System Architecture</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --accent-root: #e11d48;
+            --accent-prod: #2563eb;
+            --accent-model: #059669;
+            --line-color: #cbd5e1;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 24px 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Card Styling within ForeignObject */
+        .node-card {
+            width: 100%;
+            height: 100%;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+
+        .node-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .card-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+        }
+
+        .card-body {
+            padding: 12px 16px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow-y: auto;
+        }
+
+        .detail-item {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+
+        .detail-item::before {
+            content: "•";
+            color: #94a3b8;
+        }
+
+        .file-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: auto;
+            padding-top: 8px;
+            border-top: 1px dashed #f1f5f9;
+        }
+
+        /* Type specific branding */
+        .type-root .card-badge {
+            background: var(--accent-root);
+        }
+
+        .type-root .card-header {
+            background: #fff1f2;
+        }
+
+        .type-branch-p .card-badge {
+            background: var(--accent-prod);
+        }
+
+        .type-branch-p .card-header {
+            background: #eff6ff;
+        }
+
+        .type-branch-m .card-badge {
+            background: var(--accent-model);
+        }
+
+        .type-branch-m .card-header {
+            background: #ecfdf5;
+        }
+
+        .type-common .card-badge {
+            background: #7c3aed;
+        }
+
+        .type-leaf-p .card-badge {
+            background: #60a5fa;
+        }
+
+        .type-leaf-m .card-badge {
+            background: #34d399;
+        }
+
+        /* Links */
+        .link {
+            fill: none;
+            stroke: var(--line-color);
+            stroke-width: 2px;
+            opacity: 0.8;
+        }
+
+        .header-ui {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 800;
+            color: #111827;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        p {
+            margin: 4px 0 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            width: 80%;
+            max-width: 800px;
+            max-height: 85vh;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .modal-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f9fafb;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #111827;
+        }
+
+        .close-btn {
+            font-size: 24px;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 0 8px;
+        }
+
+        .close-btn:hover {
+            color: #111827;
+        }
+
+        .code-block {
+            margin: 0;
+            padding: 24px;
+            overflow: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            background: #fff;
+        }
+
+        @keyframes modalPop {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <script src="scripts/dom-to-image.min.js"></script>
+    <div class="header-ui">
+        <h1>Prompt System Architecture</h1>
+        <p>13-Leaf Binary Decision Tree • Live Physical Mapping</p>
+        <button id="exportBtn" style="
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: #111827;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        ">Export as PNG</button>
+        <button id="exportSvgBtn" style="
+            margin-top: 12px;
+            margin-left: 8px;
+            padding: 8px 16px;
+            background: #4b5563;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        ">Export as SVG (Vector)</button>
+    </div>
+    <div class="container" id="chart"></div>
+
+    <script src="tree_data.js"></script>
+    <script>
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Card Dimensions
+        const cardW = 280;
+        const cardH = 180;
+
+        const svg = d3.select("#chart").append("svg")
+            .attr("viewBox", [-width / 2, -height / 2, width, height])
+            .call(d3.zoom().on("zoom", (e) => g.attr("transform", e.transform)));
+
+        const g = svg.append("g");
+
+        const tree = d3.tree()
+            .nodeSize([cardH + 40, cardW + 80]); // Vertical spacing, Horizontal spacing
+
+        const root = d3.hierarchy(data);
+        tree(root);
+
+        // Calculate links
+        const links = root.links();
+        const nodes = root.descendants();
+
+        // Draw Links (Bezier)
+        g.selectAll(".link")
+            .data(links)
+            .enter().append("path")
+            .attr("class", "link")
+            .attr("d", d => {
+                // Connect right side of source to left side of target
+                return `M${d.source.y + cardW},${d.source.x + cardH / 2}
+                        C${d.source.y + cardW + 50},${d.source.x + cardH / 2}
+                         ${d.target.y - 50},${d.target.x + cardH / 2}
+                         ${d.target.y},${d.target.x + cardH / 2}`;
+            });
+
+        // Draw Nodes (ForeignObject Cards)
+        const node = g.selectAll(".node")
+            .data(nodes)
+            .enter().append("foreignObject")
+            .attr("width", cardW)
+            .attr("height", cardH)
+            .attr("x", d => d.y)
+            .attr("y", d => d.x);
+
+        node.append("xhtml:div")
+            .attr("class", d => `node-card type-${d.data.type}`)
+            .html(d => `
+                <div class="card-header">
+                    <span class="card-title">${d.data.name}</span>
+                    <span class="card-badge">${d.data.type.replace('type-', '')}</span>
+                </div>
+                <div class="card-body">
+                    ${d.data.details ? d.data.details.map(i => `<div class="detail-item">${i}</div>`).join('') : ''}
+                    <div class="file-path">${d.data.file}</div>
+                </div>
+            `);
+
+        // Click Interaction for Modal
+        node.on("click", (event, d) => {
+            if (d.data.fullContent) {
+                showModal(d.data.name, d.data.fullContent);
+            }
+        });
+
+        // Modal Logic
+        const modal = d3.select("body").append("div")
+            .attr("class", "modal-overlay")
+            .style("display", "none")
+            .on("click", () => modal.style("display", "none"));
+
+        const modalContent = modal.append("div")
+            .attr("class", "modal-content")
+            .on("click", (e) => e.stopPropagation());
+
+        const modalHeader = modalContent.append("div").attr("class", "modal-header");
+        const modalTitle = modalHeader.append("h2");
+        modalHeader.append("span").attr("class", "close-btn").text("×").on("click", () => modal.style("display", "none"));
+
+        const modalBody = modalContent.append("pre").attr("class", "code-block");
+
+        function showModal(title, content) {
+            modalTitle.text(title);
+            modalBody.text(content);
+            modal.style("display", "flex");
+        }
+
+        // Center View
+        g.attr("transform", `translate(${-width / 3}, 0)`);
+
+        // Export Functionality
+        // Helper: Get all CSS from document
+        function getCSSStyles() {
+            const selectorTextArr = [];
+            // Add Default Font Family explicitly to ensure it renders in canvas
+            selectorTextArr.push(`
+                * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; }
+            `);
+
+            for (let i = 0; i < document.styleSheets.length; i++) {
+                try {
+                    const cssRules = document.styleSheets[i].cssRules;
+                    for (let j = 0; j < cssRules.length; j++) {
+                        selectorTextArr.push(cssRules[j].cssText);
+                    }
+                } catch (e) {
+                    console.warn("Access to stylesheet blocked (CORS):", e);
+                }
+            }
+            return selectorTextArr.join("\n");
+        }
+
+        // Export Functionality (Manual Rasterization)
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const btn = document.getElementById('exportBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Rasterizing...";
+            btn.style.opacity = "0.7";
+
+            setTimeout(() => {
+                try {
+                    // 1. Get BBox
+                    const graphGroup = d3.select("#chart svg g").node();
+                    const bbox = graphGroup.getBBox();
+                    const pad = 60;
+                    const finalW = Math.ceil(bbox.width + pad * 2);
+                    const finalH = Math.ceil(bbox.height + pad * 2);
+
+                    // 2. Clone SVG
+                    const svgNode = d3.select("#chart svg").node();
+                    const clone = svgNode.cloneNode(true);
+
+                    // 3. Inject CSS Styles (CRITICAL for foreignObject)
+                    const style = document.createElement("style");
+                    style.textContent = getCSSStyles();
+                    clone.insertBefore(style, clone.firstChild);
+
+                    // 4. Configure Clone
+                    const d3Clone = d3.select(clone);
+                    d3Clone.select("g").attr("transform", null);
+                    d3Clone
+                        .attr("width", finalW)
+                        .attr("height", finalH)
+                        .attr("viewBox", `${bbox.x - pad} ${bbox.y - pad} ${finalW} ${finalH}`)
+                        .attr("xmlns", "http://www.w3.org/2000/svg");
+
+                    // 5. Generate Image via dom-to-image (Works on localhost)
+                    domtoimage.toPng(clone, {
+                        width: finalW,
+                        height: finalH,
+                        bgcolor: '#f8f9fa',
+                        style: {
+                            'transform': 'none',
+                            'transform-origin': '0 0'
+                        }
+                    })
+                        .then(function (dataUrl) {
+                            var link = document.createElement('a');
+                            link.download = 'prompt_tree_full.png';
+                            link.href = dataUrl;
+                            link.click();
+
+                            // Cleanup
+                            document.body.removeChild(container);
+                            btn.innerText = originalText;
+                            btn.style.opacity = "1";
+                        })
+                        .catch(function (error) {
+                            console.error('dom-to-image failed:', error);
+                            alert("PNG Export failed. Please check console.");
+                            document.body.removeChild(container);
+                            btn.innerText = "Export Failed";
+                            btn.style.opacity = "1";
+                        });
+
+                } catch (e) {
+                    console.error("Export pipeline failed:", e);
+                    alert("Export failed: " + e.message);
+                    btn.innerText = originalText;
+                    btn.style.opacity = "1";
+                }
+            }, 50); // Small delay to let UI update
+        });
+
+
+        // SVG Export Functionality (Robust Fallback)
+        document.getElementById('exportSvgBtn').addEventListener('click', () => {
+            const btn = document.getElementById('exportSvgBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Processing...";
+
+            try {
+                // 1. Get the content
+                const svgNode = d3.select("#chart svg").node();
+                const clone = svgNode.cloneNode(true);
+
+                // 2. Get accurate BBox
+                const graphGroup = d3.select("#chart svg g").node();
+                const bbox = graphGroup.getBBox();
+                const pad = 40;
+                const finalW = bbox.width + pad * 2;
+                const finalH = bbox.height + pad * 2;
+
+                // 3. Configure clone
+                const d3Clone = d3.select(clone);
+                d3Clone.select("g").attr("transform", null);
+                d3Clone
+                    .attr("width", finalW)
+                    .attr("height", finalH)
+                    .attr("viewBox", `${bbox.x - pad} ${bbox.y - pad} ${finalW} ${finalH}`)
+                    .attr("xmlns", "http://www.w3.org/2000/svg");
+
+                // 4. Serialize
+                const serializer = new XMLSerializer();
+                let source = serializer.serializeToString(clone);
+
+                // 5. Create Blob and Link
+                if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+                    source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+                }
+                const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+
+                const link = document.createElement('a');
+                link.download = 'prompt_tree_full.svg';
+                link.href = url;
+                link.click();
+
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+                btn.innerText = originalText;
+            } catch (e) {
+                console.error("SVG Export failed:", e);
+                alert("SVG Export failed. Check console.");
+                btn.innerText = originalText;
+            }
+        });
+
+    </script>
+</body>
+
+</html>

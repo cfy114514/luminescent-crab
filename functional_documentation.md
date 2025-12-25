@@ -21,14 +21,17 @@
     *   **Strict Protocol (零创造协议)**: 仅进行纹理投影，严禁凭空发明细节。
     *   **Cleanup Protocol (清理协议)**: 强制移除所有吊牌、标签和包装物，还原 "Clean Studio Look"。
     *   **Background Policy (背景策略)**: 强制纯白 (#FFFFFF)，但允许自然接触阴影 (Contact Shadows) 以增加真实感 (拒绝灰色背景)。
-    *   **Geometry Handling (形体处理)**: 允许一定程度的标准化 (Idealization)，不强制锁定为原图的物理塌陷状态 (Reverted "Master Mold" Lock)，但允许 AI 修正不完美的曲线。
+    *   **Binary Tree Architecture (二叉树架构)**: 采用严格的 "Root -> Branch (Model/Product) -> Leaf" 决策树结构。
+    *   **Leaf Node Specificity (叶节点特异性)**: 13个独立的 "Leaf Files" (如 `10_product/leaves/front.js`, `11_model/leaves/side.js`) 定义了每个视角的物理规则、构图锁定和光影要求。
+    *   **Pre-flight Logic (预检逻辑)**: 在组装 Prompt 前运行逻辑检查 (如 `isDetail` 自动注入微距参数，`isBack` 自动屏蔽正面描述)。
     *   **Smart Context**: 自动消费 Reviewer 提取的 `smartConfig.description` 作为 Ground Truth。
 
 ### 1.4 Modular Preset Engine (预设拼装层)
 *   **功能**: `ModelEditor`, `StyleEditor`, `ViewpointEditor` & `getViewPrompt`
 *   **角色**: "Modular Scene Compositor" (模块化场景合成器)
 *   **核心逻辑**:
-    *   **Quad-Modular Splicing (四元拼装)**: 提示词由 **Category (品类)** + **Identity (身份)** + **Composition (构图)** + **Artistic Style (风格)** 四部分模块化拼接。
+    *   **Dynamic Tree Traversal (动态树遍历)**: 提示词不再是简单的线性拼接，而是基于 `viewType` (视角) 和 `category` (品类) 遍历文件树：`00_Root` -> `10_Product` 或 `11_Model` -> `Specific Leaf`。
+    *   **Context-Aware Assembly**: 系统自动根据 `isModel` 标志选择加载 `skeleton` (骨架逻辑) 或 `rendering` (静物渲染逻辑)。
     *   **Auto-Sync Logic**: 系统启动时自动对比 `presets.json`。若发现新的系统预置（如新增的模特视角），将自动合并至用户的本地存储中，确保平滑升级。
     *   **Refined Lifestyle Poses**: 生活姿势已精准细化为：手扶帽檐 (Hat)、低头微笑 (Smile)、回头侧望 (Look back)、坐姿造型 (Sitting)。每个机位均支持独立逆向提取与生成。
     *   **Identity DNA Extraction**: 专门针对模特的五官、肤温、发质进行 AI 逆向，侧重物理身份的唯一性。
@@ -89,4 +92,18 @@
     *   **Visual Feedback**: 提供原图与处理后图片的对比预览及进度指示。
 
 ## 4. 已知限制与待办
-*   **NanoBanana 适配**: 目前主要针对 Gemini 模型优化，NanoBanana 适配器尚未完全同步最新的 Prompt 逻辑。
+## 5. 可视化与工具链 (Visualization & Tooling)
+
+### 5.1 交互式架构图 (`prompt_tree.html`)
+*   **引擎**: D3.js + SVG ForeignObject.
+*   **功能**:
+    *   **Live Mapping**: 实时以层级树状图展示当前的 Prompt 逻辑结构。
+    *   **Full Content Inspector**: 点击任意节点可弹窗查看该模块的**完整源码** (Full Source Code)，支持语法高亮。
+    *   **Export PNG**: 支持一键导出当前架构图为高清 PNG 图片 (基于 `dom-to-image`)。
+    *   **Bilingual**: 支持中英对照显示核心术语 (e.g., "Physics Lock (物理定律锁)").
+
+### 5.2 自动化同步 (`scripts/sync_viz.js`)
+*   **Workflow**: `/sync_viz`
+*   **功能**: 自动读取 `src/services/core/prompts` 下的所有 JS 文件，解析关键规则，并生成独立数据需文件 `tree_data.js`，供前端加载。
+*   **Watch Mode**: 支持 `--watch` 参数，实现代码修改后的毫秒级图表更新。
+

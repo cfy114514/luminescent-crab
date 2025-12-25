@@ -25,7 +25,11 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
     const effectiveTemp = (creativity / 100) * 1.5; // 0.0 to 1.5
 
     // Strictness Injection
-    const strictnessPrompt = creativity < 30
+    // CRITICAL FIX: Do NOT enforce 1:1 Layout Replicate for Model Views (m_*) because they REQUIRE zooming/cropping to Half-Body.
+    // Only enforce for Product Views (p_*) where we want exact cutout.
+    const isModelView = config?.viewType?.startsWith('m_') || config?.viewType?.startsWith('model_');
+
+    const strictnessPrompt = (creativity < 30 && !isModelView)
         ? "\n[STRICT MODE ACTIVE]: REPLICATE LAYOUT 1:1 (NO ZOOM/NO RADIUS). However, you MUST perform HIGH-END RETOUCHING: Smooth all jagged edges, remove wrinkles, and fix lighting. The outline must be identical, but the content must be PERFECTLY BEAUTIFIED."
         : "";
 
@@ -69,6 +73,8 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
     };
 
     console.log(`[Gemini] Sending Request to ${apiUrl}... (Img2Img: ${!!img2imgInput})`);
+    console.log("[Gemini Request Prompt]:", parts[0]?.text); // Show exact text prompt
+
 
     const response = await fetch(apiUrl, {
         method: 'POST',
