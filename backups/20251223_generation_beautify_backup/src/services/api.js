@@ -328,7 +328,7 @@ const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl
     const advancedInstructions = config ? `
 [GENERATION DIRECTIVES]
 - ASPECT RATIO: ${config.aspect_ratio || '1:1'}
-- OUTPUT QUALITY: ${config.imageSize || '1K'}
+- OUTPUT QUALITY: ${config.imageSize || '2K'}
 - THINKING DEPTH: ${config.thinkingLevel || 'high'} (Optimize for reasoning and complex spatial logic)
 - FIDELITY MODE: ${creativity < 30 ? 'STRICT COPY' : 'CREATIVE REIMAGINING'}${strictnessPrompt}
 `.trim() : '';

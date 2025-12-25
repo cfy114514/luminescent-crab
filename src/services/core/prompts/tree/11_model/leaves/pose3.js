@@ -1,6 +1,6 @@
 export const LEAF_PROMPT_MODEL_POSE3 = `
-[VIEW SPECIFIC: POSE 3 (CANDID / LIFESTYLE)]:
-1. **MOVEMENT SUGGESTION**: Implicit motion (e.g., turning head).
-2. **NATURAL EXPRESSION**: Softer facial expression.
-3. **OFF-AXIS**: Not perfectly centered, slightly more organic framing.
+- **GENERIC PORTRAIT INSTRUCTION**: Create a High-Professional Commercial Portrait. 
+- **ANGLE LOGIC**: The camera angle is dictated SOLELY by the Hat's Orientation. Follow the hat.
+- **POSE**: Confident commercial look.
+- **SCALE**: Hat occupies 20% of frame. Medium shot.
 `;

@@ -1,18 +1,23 @@
 import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Camera, User, Play, X, Loader2, Download, Maximize2, AlertCircle } from 'lucide-react';
+import { Camera, User, Play, X, Loader2, Download, Maximize2, AlertCircle, Map, Focus, RotateCcw, Layout } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const WorkflowRow = ({
     slot,
     file,
+    poseFile,
     result,
     isProcessing,
     onUpload,
+    onPoseUpload,
     onRemove,
+    onPoseRemove,
     onGenerate,
     onZoom,
-    index
+    index,
+    metadata,
+    onMetadataChange
 }) => {
 
     const onDrop = useCallback(acceptedFiles => {
@@ -20,6 +25,12 @@ const WorkflowRow = ({
             onUpload(slot.id, acceptedFiles[0]);
         }
     }, [slot.id, onUpload]);
+
+    const onPoseDrop = useCallback(acceptedFiles => {
+        if (acceptedFiles.length > 0) {
+            onPoseUpload(slot.id, acceptedFiles[0]);
+        }
+    }, [slot.id, onPoseUpload]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -29,9 +40,17 @@ const WorkflowRow = ({
         disabled: isProcessing
     });
 
-    const previewUrl = file ? URL.createObjectURL(file) : null;
+    const { getRootProps: getPoseRootProps, getInputProps: getPoseInputProps, isDragActive: isPoseDragActive } = useDropzone({
+        onDrop: onPoseDrop,
+        accept: { 'image/*': [] },
+        maxFiles: 1,
+        multiple: false,
+        disabled: isProcessing
+    });
 
-    // Helper to determine status color
+    const previewUrl = file ? URL.createObjectURL(file) : null;
+    const posePreviewUrl = poseFile ? URL.createObjectURL(poseFile) : null;
+
     const getStatusColor = () => {
         if (result?.error) return 'border-red-500/50 bg-red-500/5';
         if (result?.url) return 'border-green-500/50 bg-green-500/5';
@@ -39,9 +58,16 @@ const WorkflowRow = ({
         return 'border-slate-700 bg-slate-800/20';
     };
 
+    const perspectives = [
+        { id: 'front', label: '正', icon: Layout, color: 'text-blue-400' },
+        { id: 'side', label: '侧', icon: Focus, color: 'text-green-400' },
+        { id: 'back', label: '背', icon: RotateCcw, color: 'text-purple-400' },
+        { id: 'angle', label: '斜', icon: Map, color: 'text-amber-400' },
+    ];
+
     return (
         <div className={`
-            group relative grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 p-3 rounded-xl border transition-all duration-300
+            group relative grid grid-cols-1 md:grid-cols-[auto_1fr_auto_1fr] gap-4 p-3 rounded-xl border transition-all duration-300
             ${getStatusColor()}
             hover:border-slate-600
         `}>
@@ -50,7 +76,68 @@ const WorkflowRow = ({
                 {index + 1}
             </div>
 
-            {/* 1. INPUT SLOT (Left) */}
+            {/* 0. PERSPECTIVE SELECTOR + POSE REFERENCE */}
+            <div className="flex items-center gap-3">
+                {/* Manual Perspective Selector */}
+                <div className="flex flex-col gap-1.5 p-1.5 bg-slate-900/50 rounded-lg border border-slate-800">
+                    <span className="text-[7px] font-black text-slate-500 uppercase text-center mb-0.5">Focus</span>
+                    {perspectives.map(p => {
+                        const isActive = metadata?.perspective === p.id;
+                        return (
+                            <button
+                                key={p.id}
+                                onClick={() => onMetadataChange(slot.id, { ...metadata, perspective: isActive ? null : p.id })}
+                                className={`
+                                    w-8 h-8 rounded-md flex flex-col items-center justify-center transition-all
+                                    ${isActive
+                                        ? 'bg-white/10 ring-1 ring-white/20'
+                                        : 'hover:bg-white/5 opacity-40 hover:opacity-100'}
+                                `}
+                                title={`${p.label}面对正 (Locked to ${p.id} perspective)`}
+                            >
+                                <p.icon className={`w-3.5 h-3.5 ${isActive ? p.color : 'text-slate-400'}`} />
+                                <span className={`text-[8px] font-bold ${isActive ? 'text-white' : 'text-slate-500'}`}>{p.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {slot.type === 'model' && (
+                    <div
+                        {...getPoseRootProps()}
+                        className={`
+                        relative w-32 aspect-[3/4] rounded-lg border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-2 text-center overflow-hidden
+                        ${poseFile ? 'border-transparent bg-slate-900' : 'border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10'}
+                        ${isPoseDragActive ? 'border-purple-500 bg-purple-500/20' : ''}
+                    `}
+                    >
+                        <input {...getPoseInputProps()} />
+                        {poseFile ? (
+                            <>
+                                <img src={posePreviewUrl} alt="Pose Ref" className="absolute inset-0 w-full h-full object-cover opacity-70" />
+                                <div className="z-10 absolute top-1 right-1">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onPoseRemove(slot.id); }}
+                                        className="p-1 bg-red-500/80 rounded-full text-white hover:bg-red-600 transition-colors"
+                                    >
+                                        <X className="w-2.5 h-2.5" />
+                                    </button>
+                                </div>
+                                <div className="z-10 absolute bottom-0 left-0 right-0 p-0.5 bg-purple-600/80">
+                                    <span className="text-[8px] font-bold text-white uppercase">Pose Ref</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center gap-1 text-purple-400 opacity-60">
+                                <User className="w-5 h-5" />
+                                <span className="text-[8px] font-bold">参考姿势</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 1. INPUT SLOT (Hat Asset) */}
             <div
                 {...getRootProps()}
                 className={`
@@ -73,17 +160,21 @@ const WorkflowRow = ({
                                 <X className="w-3 h-3" />
                             </button>
                         </div>
-                        <div className="z-10 absolute bottom-0 left-0 right-0 p-1 bg-black/60 backdrop-blur-sm">
-                            <span className="text-[10px] font-medium text-white block truncate">{slot.label}</span>
+                        <div className="z-10 absolute bottom-0 left-0 right-0 p-1 bg-blue-600/80">
+                            <span className="text-[10px] font-bold text-white block truncate">
+                                {slot.type === 'model' ? 'HAT ASSET' : slot.label}
+                            </span>
                         </div>
                     </>
                 ) : (
                     <div className="flex flex-col items-center gap-1 text-slate-500">
                         {slot.type === 'product'
                             ? <Camera className="w-5 h-5 mb-1 opacity-50" />
-                            : <User className="w-5 h-5 mb-1 opacity-50" />
+                            : <Camera className="w-5 h-5 mb-1 opacity-50 text-blue-400" />
                         }
-                        <span className="text-[10px] font-bold leading-tight">{slot.label}</span>
+                        <span className="text-[10px] font-bold leading-tight">
+                            {slot.type === 'model' ? '帽子原图' : slot.label}
+                        </span>
                     </div>
                 )}
             </div>

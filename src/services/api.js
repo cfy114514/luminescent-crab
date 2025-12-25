@@ -21,8 +21,9 @@ const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2
     }
 
     // Centralized Post-processing for scaling if it's a product view
-    // EXCEPTION: Skip for 'detail' and 'model_*' views as requested.
-    const isModelView = config?.viewType?.startsWith('model_');
+    // EXCEPTION: Skip for 'detail' and 'model_*' views.
+    // We use 'isModelTask' to ensure manual tags (Front/Back) don't trigger product scaling.
+    const isModelView = config?.viewType?.startsWith('model_') || config?.isModelTask;
     const isDetailView = config?.viewType === 'detail';
 
     if (resultUrl && config?.viewType && !isModelView && !isDetailView) {
@@ -32,7 +33,7 @@ const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2
     return resultUrl;
 };
 
-export const generateImages = async (viewImagesMap, config, onImageGenerated, onStatus, presets = null) => {
+export const generateImages = async (viewImagesMap, config, onImageGenerated, onStatus, presets = null, poseImagesMap = {}, slotMetadata = {}) => {
     const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
 
     // Dynamic URL Construction based on Config Model
@@ -55,10 +56,13 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
     // 1. Build Task List based on Uploads
     // Unlike before, we don't generate 6 images from 1. We generate 1 image from 1 upload.
     const tasks = Object.entries(viewImagesMap).map(([slotId, file]) => {
+        const metadata = slotMetadata[slotId];
+        const viewType = metadata?.perspective || SLOT_TO_VIEW_TYPE[slotId] || 'front';
+
         return {
             key: slotId,
             file: file,
-            viewType: SLOT_TO_VIEW_TYPE[slotId] || 'front',
+            viewType: viewType,
             label: SLOT_LABELS[slotId] || slotId,
             isModel: slotId.startsWith('m_')
         };
@@ -91,26 +95,34 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
                     });
                 }
 
-                // --- INJECT MODEL TEMPLATE IF APPLICABLE ---
-                const selectedModel = presets?.models?.find(m => m.id === config.modelId);
-                if (task.isModel && selectedModel?.templateImage) {
-                    // templateImage is typically data:image/png;base64,....
-                    const tmplParts = selectedModel.templateImage.split(',');
-                    if (tmplParts.length === 2) {
-                        const mime = tmplParts[0].split(';')[0].split(':')[1];
-                        const data = tmplParts[1];
-                        processedImages.push({
-                            data: data,
-                            mimeType: mime,
-                            label: 'MODEL_TEMPLATE' // Used by prompt logic as "Image 2"
-                        });
-                    }
+                // 2b. Pose Control: INTERROGATION MODE (Safe & Precise)
+                const poseFile = poseImagesMap[task.key];
+                let manualPose = null;
+                if (poseFile && task.isModel) {
+                    updateStatus(`Analyzing Scale & Pose...`);
+                    const poseResult = await interrogateImages([poseFile], 'structural_pose');
+                    // Packaging all structural data including limb specifics
+                    manualPose = {
+                        structural_prompt: poseResult.structural_prompt,
+                        scaling_mandate: poseResult.scaling_mandate,
+                        limb_action: poseResult.limb_action,
+                        facial_expression: poseResult.facial_expression
+                    };
                 }
 
-                const currentPrompt = getViewPrompt(task.viewType, config, [task.label], task.key, presets, styleRef ? 'STYLE_REFERENCE' : '');
+                const currentPrompt = getViewPrompt(
+                    task.viewType,
+                    { ...config, manualPose }, // Inject extracted pose text
+                    [task.label],
+                    task.key,
+                    presets
+                );
 
                 // 3. Generate
                 updateStatus(`Refining: ${task.label}...`);
+
+                // Update payload for inspector (last task wins)
+                generatedResults.payload = currentPrompt;
 
                 const resultUrl = await generateSingleImage(
                     processedImages,
@@ -118,7 +130,7 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
                     apiKey,
                     apiUrl,
                     null, // No img2img input for now
-                    { ...config, viewType: task.viewType } // Pass viewType for post-processing logic
+                    { ...config, viewType: task.viewType, isModelTask: task.isModel } // Pass viewType for post-processing logic
                 );
 
                 // 4. Success Handling
@@ -327,9 +339,12 @@ INSTRUCTION: Analyze the hat's style (casual, formal, vintage, streetwear, etc.)
 OUTPUT FORMAT (JSON ONLY, NO MARKDOWN):
 {
   "style_analysis": "Brief analysis of the hat style and era (e.g., 'Casual straw boater hat, summer/beach aesthetic')",
-  "outfit_description": "Detailed description of the complete outfit from top to bottom (e.g., 'White linen button-up shirt with rolled sleeves, light khaki chinos, brown leather belt')",
+  "outfit_description": "Detailed description of the clothing suitable for a fashion prompt (e.g., 'White linen button-up shirt with rolled sleeves, light khaki chinos, brown leather belt')",
   "style_keywords": ["casual", "summer", "beach", "relaxed"],
   "color_palette": ["white", "khaki", "brown", "natural tones"],
+  "visual_identity": "string (If a person is present in REF: describe their Face/Hair/Ethnicity/Age in prompt format. e.g., 'Young Japanese woman with bob hair'. If no person, return null)",
+  "predicted_gender": "male" | "female" | "boy" | "girl" | "null",
+  "predicted_ethnicity": "asian" | "caucasian" | "black" | "hispanic" | "etc" | "null",
   "reasoning": "Why this outfit works with the hat"
 }
 
@@ -338,7 +353,8 @@ RULES:
 2. Consider SEASON and CONTEXT from the hat style
 3. Choose colors that COMPLEMENT the hat, not clash
 4. Keep it REALISTIC for product photography (not runway fashion)
-5. If style reference provided, PRIORITIZE matching its aesthetic
+5. If style reference provided, PRIORITIZE matching its aesthetic AND Model Identity (if visible)
+6. **CRITICAL: DO NOT DESCRIBE THE HAT/HEADWEAR.** The hat is added separately. Describe ONLY what is worn from the NECK DOWN (Shirt, Jacket, Dress, Accessories). Do not mention "wearing a hat".
 `.trim();
 
     // Build multimodal prompt
@@ -593,19 +609,37 @@ export const interrogateImages = async (imageObjects, mode = 'styles', contextLa
     let focusAreas = "";
     let outputSchema = "";
 
-    if (mode === 'model_identity') {
+    if (mode === 'model_dna') {
         focusAreas = `
-1. **Facial Structure**: Eye shape, nose bridge height, lip volume, jawline, and proportions.
-2. **Skin & Beauty**: Skin tone, texture (pores, freckles), and ethnicity markers.
-3. **Hair Style**: Texture, length, and exact color.
-4. **Physique**: General body build and height perception.
+1. **Model Genetic DNA**: Absolute precise description of face shape (jaw, cheekbones), eye shape/tilt, nose bridge structure, lip shape, and skin texture/undertone.
+2. **Body DNA**: Head-to-body ratio, shoulder width, neck length, and overall physique.
+3. **Outfit DNA**: Detailed analysis of the outfit (layered textures, fabric type, tailoring). **CRITICAL: DO NOT INCLUDE THE HAT OR ANY HEADWEAR IN THIS DESCRIPTION.**
+4. **Consistency Map**: Identify permanent features that must be replicated across all views.
 `;
         outputSchema = `{
-  "visual_description": "A summary of the model's look.",
-  "visual_identity": "Prompt segment defining ONLY physical appearance (face, skin, hair).",
-  "consistency_notes": "Critical features for identity."
+  "visual_identity": "Extreme detail prompt segment for face and skin.",
+  "physique_dna": "Prompt segment for body proportions and build.",
+  "outfit_dna": "Prompt segment for clothing (excluding the hat).",
+  "predicted_gender": "male/female",
+  "predicted_ethnicity": "e.g., East Asian, Caucasian, etc."
 }`;
-    } else if (mode === 'model_pose') {
+    } else if (mode === 'structural_pose') {
+        focusAreas = `
+1. **Compositional Harmony**: Describe the subject's position in the frame using visual logic (e.g., "Centered with a high-key focus", "Ample negative space at the top for a minimalist look").
+2. **Subject Presence & Scale**: Relative size of the subject in the view. Is it a tight portrait or a relaxed medium-shot? 
+3. **Anatomical Flow**: The natural angle of the head and shoulders. Use visual directions (e.g., "Gazing towards the upper left", "Shoulders relaxed and slightly tilted").
+4. **Limb & Hand Rhythm**: Describe the action of the hands naturally (e.g., "A gentle hand resting on the hat's edge").
+5. **Demeanor & Occlusion (神态与遮挡)**: The emotional soul of the reference. CRITICAL: Identify if the face or eyes are HIDDEN by the hat brim (e.g., "Eyes are completely obscured by the shadow of the brim", "Only the lower jaw is visible").
+6. **Anatomical Flow**: The natural angle of the head and shoulders.
+7. **FORBIDDEN**: DO NOT describe any lighting, shadows, exposure, or environmental highlights. Focus ONLY on geometry and anatomy.
+`;
+        outputSchema = `{
+  "structural_prompt": "Stylistic description of the pose and flow.",
+  "scaling_mandate": "Visual instruction for size and negative space.",
+  "limb_action": "Description of the hands' organic movement.",
+  "facial_expression": "The model's specific demeanor, including any MANDATORY OCCLUSION (e.g., 'Eyes hidden by hat brim shadow')."
+}`;
+    } else if (mode === 'model_identity') {
         focusAreas = `
 1. **Human Action**: Detailed description of the specific pose (e.g., "Looking over shoulder", "One hand in pocket").
 2. **Dynamic & Energy**: Relaxed, formal, athletic, or editorial.

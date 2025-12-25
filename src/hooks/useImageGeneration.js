@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { generateImages } from '../services/api';
 
-export const useImageGeneration = (presets) => {
+export const useImageGeneration = (presets, poseImages = {}, slotMetadata = {}) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [results, setResults] = useState({});
     const [error, setError] = useState(null);
@@ -84,6 +84,7 @@ export const useImageGeneration = (presets) => {
         setStatusMessage(`Generating single view: ${slotId}...`);
 
         const singleMap = { [slotId]: file };
+        const poseMap = poseImages[slotId] ? { [slotId]: poseImages[slotId] } : {};
         const finalConfig = overrideConfig ? { ...config, ...overrideConfig } : config;
 
         try {
@@ -94,7 +95,9 @@ export const useImageGeneration = (presets) => {
                     setResults(prev => ({ ...prev, [key]: resultData }));
                 },
                 (status) => setStatusMessage(status),
-                presets
+                presets,
+                poseMap,
+                slotMetadata
             );
             setResults(prev => ({ ...prev, ...data.images }));
         } catch (err) {
@@ -106,7 +109,7 @@ export const useImageGeneration = (presets) => {
         }
     };
 
-    const generateAll = async (viewImages, config, outfitSuggestion) => {
+    const generateAll = async (viewImages, config, outfitSuggestion, activeTab = 'product') => {
         // Check uploads
         const inputFiles = Object.values(viewImages);
         if (inputFiles.length === 0) {
@@ -116,7 +119,7 @@ export const useImageGeneration = (presets) => {
 
         // Model Check
         const hasModelImages = Object.keys(viewImages).some(k => k.startsWith('m_'));
-        if (hasModelImages && !config.modelId) {
+        if (hasModelImages && activeTab === 'model' && !config.modelId) {
             setError("上传了模特展示图，请先选择一个模特 (Model View detected. Please select a Model Identity)");
             return;
         }
@@ -134,16 +137,26 @@ export const useImageGeneration = (presets) => {
             finalConfig.outfitSuggestion = outfitSuggestion.outfit_description;
         }
 
+        // FILTER: Only generate for slots belonging to the current "Logic Group"
+        const filteredViewImages = Object.fromEntries(
+            Object.entries(viewImages).filter(([key]) => {
+                if (activeTab === 'product') return key.startsWith('p_');
+                return key.startsWith('m_');
+            })
+        );
+
         try {
             const data = await generateImages(
-                viewImages,
+                filteredViewImages,
                 finalConfig,
                 (key, resultData, current, total) => {
                     setResults(prev => ({ ...prev, [key]: resultData }));
                     setProgress({ current, total });
                 },
                 (status) => setStatusMessage(status),
-                presets
+                presets,
+                poseImages,
+                slotMetadata
             );
 
             const newBatch = {

@@ -1,6 +1,6 @@
 export const LEAF_PROMPT_MODEL_POSE1 = `
-[VIEW SPECIFIC: POSE 1 (CASUAL STUDIO)]:
-1. **RELAXED STANCE**: Shoulders slightly dropped, natural posture.
-2. **HEAD TILT**: Very subtle head tilt (max 5 degrees) to add life.
-3. **VIBE**: Clean, approachable, commercial catalog look.
+- **GENERIC PORTRAIT INSTRUCTION**: Create a High-Professional Commercial Portrait. 
+- **ANGLE LOGIC**: The camera angle is dictated SOLELY by the Hat's Orientation. Follow the hat.
+- **POSE**: Commercial fashion pose, slight body rotation.
+- **SCALE**: Hat occupies 20% of frame. Medium shot.
 `;

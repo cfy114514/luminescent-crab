@@ -1,6 +1,6 @@
 export const LEAF_PROMPT_MODEL_POSE2 = `
-[VIEW SPECIFIC: POSE 2 (FASHION FORWARD)]:
-1. **ANGULAR POSTURE**: More dynamic shoulder angle.
-2. **MOOD**: High-fashion, slightly aloof or "cool".
-3. **CHIN UP**: Chin slightly lifted to show confidence.
+- **GENERIC PORTRAIT INSTRUCTION**: Create a High-Professional Commercial Portrait. 
+- **ANGLE LOGIC**: The camera angle is dictated SOLELY by the Hat's Orientation. Follow the hat.
+- **POSE**: Studio pose matching the hat's dynamic angle.
+- **SCALE**: Hat occupies 20% of frame. Medium shot.
 `;

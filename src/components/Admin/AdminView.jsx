@@ -13,6 +13,7 @@ import StyleEditor from './StyleEditor';
 import ViewpointEditor from './ViewpointEditor';
 import ModelEditor from './ModelEditor';
 import CategoryEditor from './CategoryEditor';
+import SyncSettings from './SyncSettings';
 
 const AdminView = ({ onBack, presets, setPresets }) => {
     const [activeTab, setActiveTab] = useState('categories');
@@ -21,6 +22,7 @@ const AdminView = ({ onBack, presets, setPresets }) => {
         { id: 'categories', label: '产品分类管理', icon: Layout },
         // { id: 'styles', label: '风格预设管理', icon: Palette },
         { id: 'models', label: '模特库管理', icon: User },
+        { id: 'sync', label: '同步与备份', icon: Settings },
         // { id: 'viewpoints', label: '视角/机位配置', icon: Camera },
     ];
 
@@ -87,6 +89,9 @@ const AdminView = ({ onBack, presets, setPresets }) => {
                         )}
                         {activeTab === 'viewpoints' && (
                             <ViewpointEditor presets={presets} setPresets={setPresets} />
+                        )}
+                        {activeTab === 'sync' && (
+                            <SyncSettings presets={presets} onSave={setPresets} />
                         )}
                     </motion.div>
                 </div>

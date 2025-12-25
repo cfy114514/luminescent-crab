@@ -1,4 +1,3 @@
-
 // --- Google Gemini API Adapter (Sync Call) ---
 export const generateSingleImageGemini = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null, config = null) => {
     // Determine provider based on URL or Config
@@ -24,26 +23,8 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
     const creativity = config?.creativity ?? 20; // Default 20 (Strict-ish)
     const effectiveTemp = (creativity / 100) * 1.5; // 0.0 to 1.5
 
-    // Strictness Injection
-    // CRITICAL FIX: Do NOT enforce 1:1 Layout Replicate for Model Views (m_*) because they REQUIRE zooming/cropping to Half-Body.
-    // Only enforce for Product Views (p_*) where we want exact cutout.
-    const isModelView = config?.viewType?.startsWith('m_') || config?.viewType?.startsWith('model_');
-
-    const strictnessPrompt = (creativity < 30 && !isModelView)
-        ? "\n[STRICT MODE ACTIVE]: REPLICATE LAYOUT 1:1 (NO ZOOM/NO RADIUS). However, you MUST perform HIGH-END RETOUCHING: Smooth all jagged edges, remove wrinkles, and fix lighting. The outline must be identical, but the content must be PERFECTLY BEAUTIFIED."
-        : "";
-
-    // Inject Advanced Settings as text instructions since standard generationConfig doesn't support them
-    const advancedInstructions = config ? `
-[GENERATION DIRECTIVES]
-- ASPECT RATIO: ${config.aspect_ratio || '1:1'}
-- OUTPUT QUALITY: ${config.imageSize || '1K'}
-- THINKING DEPTH: ${config.thinkingLevel || 'high'} (Optimize for reasoning and complex spatial logic)
-- FIDELITY MODE: ${creativity < 30 ? 'STRICT COPY' : 'CREATIVE REIMAGINING'}${strictnessPrompt}
-`.trim() : '';
-
     const parts = [
-        { text: `${advancedInstructions}\n\n${prompt}`.trim() },
+        { text: prompt.trim() },
         ...inlineDataParts
     ];
 
@@ -62,11 +43,17 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
         });
     }
 
+    // Parse Resolution
+    let width = 1024;
+    let height = 1024;
+    if (config?.imageSize === '2K') { width = 2048; height = 2048; }
+    if (config?.imageSize === '4K') { width = 4096; height = 4096; }
+
     const payload = {
         contents: [{ parts: parts }],
         generationConfig: {
             temperature: effectiveTemp,
-            topK: creativity < 20 ? 1 : 40, // Deterministic at very low creativity
+            topK: creativity < 20 ? 1 : 40,
             topP: 0.9,
             maxOutputTokens: 2048,
         }

@@ -15,7 +15,9 @@ import { useImageGeneration } from './hooks/useImageGeneration';
 
 function App() {
   // 1. Core Config State (UI State)
+  const [activeTab, setActiveTab] = useState('product'); // 'product' or 'model'
   const [viewImages, setViewImages] = useState({});
+  const [poseImages, setPoseImages] = useState({});
   const [config, setConfig] = useState({
     creativity: 20, // Default to Low Creativity (Strict Mode)
     model: 'gemini-2.5-flash-image', // Default Model
@@ -29,6 +31,7 @@ function App() {
     temperature: 1.0,
     description: '',
   });
+  const [slotMetadata, setSlotMetadata] = useState({}); // Custom perspective overrides per slot
   const [styleReferenceImage, setStyleReferenceImage] = useState(null);
 
   // UI Toggles
@@ -58,7 +61,7 @@ function App() {
     generateSingle,
     downloadAll,
     clearAll
-  } = useImageGeneration(presets);
+  } = useImageGeneration(presets, poseImages, slotMetadata);
 
   // Derived Status Display
   const displayStatus = isAnalyzing ? analysisStatus : genStatusMessage;
@@ -80,15 +83,15 @@ function App() {
       { id: 'p_inside', label: '内部结构 (Inside)', type: 'product' },
 
       // Model Views (Dynamic)
-      { id: 'm_front', label: hasTemplate ? '帽子素材 (输入A)' : '模特-正面 (Front)', type: 'model' },
-      { id: 'm_side', label: hasTemplate ? '帽子素材 (输入B)' : '模特-侧面 (Side)', type: 'model' },
-      { id: 'm_back', label: hasTemplate ? '帽子素材 (输入C)' : '模特-背面 (Back)', type: 'model' },
-      { id: 'm_pose1', label: hasTemplate ? '帽子素材 (输入D)' : '模特-展示1 (Pose A)', type: 'model' },
-      { id: 'm_pose2', label: hasTemplate ? '帽子素材 (输入E)' : '模特-展示2 (Pose B)', type: 'model' },
-      { id: 'm_pose3', label: hasTemplate ? '帽子素材 (输入F)' : '模特-展示3 (Pose C)', type: 'model' },
+      { id: 'm_front', label: hasTemplate ? '帽子素材 (输入A)' : '模特-人像 (Input A)', type: 'model' },
+      { id: 'm_side', label: hasTemplate ? '帽子素材 (输入B)' : '模特-人像 (Input B)', type: 'model' },
+      { id: 'm_pose1', label: hasTemplate ? '帽子素材 (输入C)' : '模特-人像 (Input C)', type: 'model' },
+      { id: 'm_pose2', label: hasTemplate ? '帽子素材 (输入D)' : '模特-人像 (Input D)', type: 'model' },
+      { id: 'm_pose3', label: hasTemplate ? '帽子素材 (输入E)' : '模特-人像 (Input E)', type: 'model' },
+      { id: 'm_back', label: hasTemplate ? '帽子素材 (输入F)' : '模特-背面 (Back Spec)', type: 'model' },
       { id: 'm_back_angle', label: hasTemplate ? '帽子素材 (输入G)' : '模特-背对斜侧 (Back Angle)', type: 'model' },
-    ];
-  }, [config.modelId, presets.models]);
+    ].filter(slot => slot.type === activeTab);
+  }, [config.modelId, presets.models, activeTab]);
 
   // 4. Handlers
   const handleRefinementCommand = async (command) => {
@@ -180,6 +183,7 @@ function App() {
             setConfig={setConfig}
             isAnalyzing={isAnalyzing}
             presets={presets}
+            savePresets={savePresets}
             styleReferenceImage={styleReferenceImage}
             setStyleReferenceImage={setStyleReferenceImage}
             outfitSuggestion={outfitSuggestion}
@@ -205,7 +209,7 @@ function App() {
 
             {/* Generate Button */}
             <button
-              onClick={() => generateAll(viewImages, config, outfitSuggestion)}
+              onClick={() => generateAll(viewImages, config, outfitSuggestion, activeTab)}
               disabled={isProcessing || Object.keys(viewImages).length === 0}
               className={`
                     flex-1 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 flex items-center justify-center gap-3
@@ -235,7 +239,22 @@ function App() {
             )}
           </div>
 
-          {/* Workflow Rows List */}
+          {/* Tab Switcher */}
+          <div className="flex-shrink-0 flex bg-slate-800/50 p-1 rounded-xl border border-slate-700">
+            <button
+              onClick={() => setActiveTab('product')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'product' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              产品抠图 (Product View)
+            </button>
+            <button
+              onClick={() => setActiveTab('model')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'model' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              模特上身 (Model Portrait)
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto custom-scrollbar pb-20 space-y-3">
             {history.length > 0 && (
               <div className="flex items-center gap-2 mb-4">
@@ -252,17 +271,26 @@ function App() {
                 slot={slot}
                 index={idx}
                 file={viewImages[slot.id]}
+                poseFile={poseImages[slot.id]}
                 result={results?.[slot.id]}
                 isProcessing={isProcessing}
                 progress={visualProgress} // Use interpolated visual progress
                 onUpload={(id, file) => setViewImages(prev => ({ ...prev, [id]: file }))}
+                onPoseUpload={(id, file) => setPoseImages(prev => ({ ...prev, [id]: file }))}
                 onRemove={(id) => setViewImages(prev => {
+                  const next = { ...prev };
+                  delete next[id];
+                  return next;
+                })}
+                onPoseRemove={(id) => setPoseImages(prev => {
                   const next = { ...prev };
                   delete next[id];
                   return next;
                 })}
                 onGenerate={(id) => generateSingle(id, viewImages, config)}
                 onZoom={(url) => setZoomedImage(url)}
+                metadata={slotMetadata[slot.id]}
+                onMetadataChange={(id, data) => setSlotMetadata(prev => ({ ...prev, [id]: data }))}
               />
             ))}
 

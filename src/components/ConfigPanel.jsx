@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Layers, Eraser, Settings, ChevronDown, ChevronUp, User, Camera, Sparkles, Loader2 } from 'lucide-react';
+import { Layers, Eraser, Settings, ChevronDown, ChevronUp, User, Camera, Sparkles, Loader2, Fingerprint } from 'lucide-react';
 import SuperResolutionPanel from './SuperResolutionPanel';
+import ModelDNAPanel from './ModelDNAPanel';
 
-const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyleReferenceImage, outfitSuggestion, onAnalyzeStyle, isAnalyzing }) => {
+const ConfigPanel = ({ config, setConfig, presets, savePresets, styleReferenceImage, setStyleReferenceImage, outfitSuggestion, onAnalyzeStyle, isAnalyzing }) => {
     const [isModelExpanded, setIsModelExpanded] = useState(true);
     const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
 
@@ -136,9 +137,44 @@ const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyle
 
                 {/* Show outfit suggestion if available */}
                 {outfitSuggestion && (
-                    <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                        <div className="text-xs font-bold text-amber-300 mb-1">AI服装建议:</div>
-                        <div className="text-[10px] text-amber-200/80">{outfitSuggestion.outfit_description}</div>
+                    <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-2">
+                        <div>
+                            <div className="text-xs font-bold text-amber-300 mb-1">AI服装建议 (Outfit):</div>
+                            <div className="text-[10px] text-amber-200/80">{outfitSuggestion.outfit_description}</div>
+                        </div>
+
+                        {/* New Identity Section */}
+                        {outfitSuggestion.visual_identity && (
+                            <div className="pt-2 border-t border-amber-500/20">
+                                <div className="text-xs font-bold text-pink-300 mb-1">AI模特识别 (Identity):</div>
+                                <div className="text-[10px] text-pink-200/80 mb-2">{outfitSuggestion.visual_identity}</div>
+                                <div className="flex gap-2">
+                                    <span className="text-[9px] bg-pink-500/20 text-pink-300 px-1.5 py-0.5 rounded">
+                                        {outfitSuggestion.predicted_gender}
+                                    </span>
+                                    <span className="text-[9px] bg-pink-500/20 text-pink-300 px-1.5 py-0.5 rounded">
+                                        {outfitSuggestion.predicted_ethnicity}
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const updates = {};
+                                        if (outfitSuggestion.outfit_description) updates.clothing = outfitSuggestion.outfit_description;
+                                        if (outfitSuggestion.predicted_gender && outfitSuggestion.predicted_gender !== 'null') updates.gender = outfitSuggestion.predicted_gender;
+                                        if (outfitSuggestion.predicted_ethnicity && outfitSuggestion.predicted_ethnicity !== 'null') updates.ethnicity = outfitSuggestion.predicted_ethnicity;
+                                        updates.modelId = ''; // Switch to custom
+
+                                        // Update parent config
+                                        Object.entries(updates).forEach(([key, val]) => handleChange(key, val));
+                                        alert("已应用 AI 分析的服装与模特特征");
+                                    }}
+                                    className="mt-2 w-full py-1 bg-gradient-to-r from-amber-600 to-pink-600 hover:from-amber-500 hover:to-pink-500 text-white text-[10px] font-bold rounded shadow transition-all"
+                                >
+                                    应用建议 (Apply All)
+                                </button>
+                            </div>
+                        )}
+
                         <div className="flex flex-wrap gap-1 mt-2">
                             {outfitSuggestion.style_keywords?.slice(0, 3).map((keyword, idx) => (
                                 <span key={idx} className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">
@@ -170,6 +206,9 @@ const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyle
 
                 {isModelExpanded && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {/* Model DNA Extraction Block */}
+                        <ModelDNAPanel config={config} setConfig={setConfig} />
+
                         {/* Aspect Ratio & Engine */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
@@ -256,6 +295,119 @@ const ConfigPanel = ({ config, setConfig, presets, styleReferenceImage, setStyle
                             }
                         })()}
 
+
+
+
+                        {/* --- Custom Model Attributes (New) --- */}
+                        <div className="pt-2 border-t border-slate-700/50 space-y-3">
+                            <label className="text-xs font-bold text-indigo-400">
+                                自定义详细特征 (Custom Attributes)
+                            </label>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* Gender */}
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400">性别 (Gender)</label>
+                                    <select
+                                        value={config.gender || 'female'}
+                                        onChange={(e) => {
+                                            handleChange('gender', e.target.value);
+                                            handleChange('modelId', ''); // Disable preset
+                                        }}
+                                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                                    >
+                                        <option value="female">Woman (女性)</option>
+                                        <option value="male">Man (男性)</option>
+                                        <option value="girl">Girl (女孩)</option>
+                                        <option value="boy">Boy (男孩)</option>
+                                    </select>
+                                </div>
+
+                                {/* Ethnicity */}
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-slate-400">人种 (Ethnicity)</label>
+                                    <select
+                                        value={config.ethnicity || 'asian'}
+                                        onChange={(e) => {
+                                            handleChange('ethnicity', e.target.value);
+                                            handleChange('modelId', ''); // Disable preset
+                                        }}
+                                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                                    >
+                                        <option value="asian">Asian (亚洲)</option>
+                                        <option value="caucasian">Caucasian (高加索/欧美)</option>
+                                        <option value="black">Black/African (黑人)</option>
+                                        <option value="hispanic">Hispanic (拉丁裔)</option>
+                                        <option value="indian">Indian (印度裔)</option>
+                                        <option value="middle_eastern">Middle Eastern (中东)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Clothing Style */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 flex justify-between">
+                                    <span>服装风格 (Clothing Style)</span>
+                                    {config.modelId === '' && <span className="text-indigo-400">* Custom Active</span>}
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. White linen shirt, Professional Studio"
+                                    value={config.clothing || ''}
+                                    onChange={(e) => {
+                                        handleChange('clothing', e.target.value);
+                                        handleChange('modelId', ''); // Disable preset
+                                    }}
+                                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                                <p className="text-[9px] text-slate-500">
+                                    输入自定义服装描述，或使用上方"风格分析"自动填充。
+                                </p>
+                            </div>
+
+                            {/* Save Preset UI */}
+                            {config.modelId === '' && (
+                                <div className="pt-2 flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="new-preset-name"
+                                        placeholder="Preset Name..."
+                                        className="flex-1 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const name = document.getElementById('new-preset-name').value;
+                                            if (!name) return alert("Please enter a preset name");
+
+                                            // Construct new preset object
+                                            const newModel = {
+                                                id: `custom_${Date.now()}`,
+                                                name: name,
+                                                gender: config.gender,
+                                                ethnicity: config.ethnicity,
+                                                visual_identity: `${config.ethnicity} ${config.gender} model, ${config.clothing || 'minimalist outfit'}`,
+                                                clothing: config.clothing // Helper for UI restoration
+                                            };
+
+                                            // Update Presets
+                                            const updatedModels = [...(presets.models || []), newModel];
+                                            const newPresets = { ...presets, models: updatedModels };
+
+                                            // Save
+                                            savePresets(newPresets);
+
+                                            // Auto-select
+                                            handleChange('modelId', newModel.id);
+                                            alert(`Saved preset: ${name}`);
+                                        }}
+                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg transition-colors font-medium"
+                                    >
+                                        保存预设
+                                    </button>
+                                </div>
+                            )}
+
+                        </div>
 
                     </div>
                 )}

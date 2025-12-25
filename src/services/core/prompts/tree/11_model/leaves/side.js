@@ -1,6 +1,6 @@
 export const LEAF_PROMPT_MODEL_SIDE = `
-[VIEW SPECIFIC: SIDE PROFILE (MODEL)]:
-1. **90 DEGREE TURN**: Pure side profile.
-2. **SILHOUETTE**: Focus on the jawline and the side profile of the hat.
-3. **NO EYE CONTACT**: The model looks straight ahead, parallel to the ground.
+- **GENERIC PORTRAIT INSTRUCTION**: Create a High-Professional Commercial Portrait. 
+- **ANGLE LOGIC**: The camera angle is dictated SOLELY by the Hat's Orientation. Follow the hat.
+- **POSE**: Professional side portrait.
+- **SCALE**: Hat occupies 20% of frame. Medium shot.
 `;

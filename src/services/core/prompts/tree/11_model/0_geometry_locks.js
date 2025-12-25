@@ -1,31 +1,48 @@
-export const MODEL_TASK_HEADER = `
-// TASK: Photorealistic Model Portrait (View orientation MUST match Reference Image exactly).
-// Note: We use a neutral task description to prevent "Front View" text from overriding a "Side View" reference image.
-TASK: Photorealistic Model Portrait generation.
-PRINCIPLE: THE HAT IS A FIXED INDUSTRIAL ANCHOR. The model is a supporting background element.
-`;
+export const getHardcoreOrientation = (viewType) => {
+   const vt = viewType.toLowerCase();
 
-export const ORIENTATION_LOCK_PRIORITY_1 = `
-[PRIORITY #1 - HAT ORIENTATION ABSOLUTE LOCK - OVERRIDES EVERYTHING]:
-**CRITICAL**: The hat's 3D orientation is the SUPREME PRIORITY. ALL other requirements are SECONDARY to this.
-1. **FROZEN ORIENTATION**: The hat's 3D angle (yaw, pitch, roll) from the reference is ABSOLUTE LAW. Copy it EXACTLY. Do NOT rotate the hat even by 1 degree.
-2. **NO STRAIGHTENING / NO CORRECTION**: If the hat in the reference is TILTED, ASYMMETRICAL, or CROOKED, you MUST preserve that exact tilt. DO NOT "fix" the angle to be straight or perfectly level.
-3. **NO ROTATION FOR AESTHETICS**: Do NOT rotate the hat to "show the model's face better" or "improve composition". The hat angle is NON-NEGOTIABLE.
-4. **FACE OCCLUSION IS ACCEPTABLE**: If the hat's correct angle means the model's face is partially or fully hidden, that is PERFECTLY ACCEPTABLE. Face visibility is NOT a requirement.
-5. **MODEL FOLLOWS HAT**: The model's head/neck position adapts to the hat, NOT the other way around. If the hat faces left, the model's head faces left even if it hides the face.
-6. **REFERENCE ORIENTATION COPY**: Look at the reference hat on the stand. Note its exact facing direction. The hat on the model MUST face that EXACT same direction.
-7. **CAMERA PITCH SYNC (CRITICAL)**:
-   - **VISUAL HEURISTIC**: Look at the reference image. Can you see the **TOP (CROWN)** of the hat?
-   - **YES (Top Visible)**: This is a **HIGH-ANGLE (BIRD'S EYE) SHOT**. You MUST place the camera ABOVE the model, looking down (俯拍). The model's chin should be tucked or lower than the forehead. Do NOT render a straight-on face.
-   - **NO (Top Hidden)**: Use standard eye-level.
-   - **STRICT FORBIDDEN**: Never render an eye-level portrait if the reference shows the top of the hat. It creates a physical impossibility.
-8. **CAMERA YAW SYNC**: Match the Left/Right rotation EXACTLY.
-`;
+   // 1. SPATIAL RED ANCHOR PROTOCOL (VIEWER-CENTRIC)
+   const calibrationProtocol = `
+[RED ANCHOR - SPATIAL TRUTH]:
+1. **DETECTION**: Locate the hand-drawn RED 'T' or MARK.
+2. **FACE ALIGNMENT**: The model's nose and gaze MUST point towards the same direction as the red mark relative to the mannequin center.
+   - **IF RED MARK IS ON VIEWER-RIGHT**: Model MUST face VIEWER-RIGHT.
+   - **IF RED MARK IS ON VIEWER-LEFT**: Model MUST face VIEWER-LEFT.
+3. **NO REVERSAL**: Do NOT mirror. Follow 2D mark coordinates.
+`.trim();
 
-export const SECONDARY_HAT_CONSTRAINTS = `
-[PRIORITY #3 - SECONDARY HAT CONSTRAINTS]:
-1. **HORIZON PARALLELISM**: The hat's brim angle is IMMUTABLE. If horizontal in reference, it stays horizontal on the model.
-2. **ZERO TOLERANCE FOR ROTATION**: Match exact pitch, yaw, roll from reference. The central axis must be perfectly vertical (90°).
-3. **SYMMETRY ENFORCEMENT**: Hat must be perfectly centered and symmetrical. No diagonal slants.
-4. **SKELETAL CONFORMANCE**: The model's neck and head position conform to the hat's geometry. The hat dictates pose, not vice versa.
-`;
+   // 2. CARTESIAN SYMMETRY LOCKS (Preventing Slant)
+   let symmetryDirective = "";
+   if (vt.includes('front') || vt.includes('back')) {
+      symmetryDirective = `
+[BILATERAL SYMMETRY LOCK]:
+1. **HORIZONTAL LEVEL**: The line connecting the eyes (or shoulder tips) MUST be perfectly parallel to the bottom edge of the frame.
+2. **ZERO TILT**: 0-degree roll. Do NOT slant the head or torso to the left or right.
+3. **AXIS ALIGNMENT**: The vertical centerline of the hat must align with the vertical centerline of the model's torso.
+`.trim();
+   } else if (vt.includes('side')) {
+      symmetryDirective = `
+[PROFILE LEVELING]:
+1. **HORIZONTAL DEPTH**: The brim of the hat must be perfectly level with the horizon.
+2. **ZERO TILT**: Ensure the model is standing perfectly upright. No leaning.
+`.trim();
+   }
+
+   let perspectiveDirective = "COMMAND: 1:1 GEOMETRY MIRROR. No rotation.";
+   if (vt.includes('back')) {
+      perspectiveDirective = "COMMAND: ABSOLUTE REAR VIEW (180deg). Face hidden.";
+   }
+
+   return `
+${calibrationProtocol}
+${symmetryDirective}
+- **PERSPECTIVE**: ${perspectiveDirective}
+`.trim();
+};
+
+export const getSurfaceBeautify = () => `
+[DIGITAL STEAM-IRONING]:
+1. **SURFACE REFINEMENT**: Smooth out all fabric wrinkles, dents, and ripples on the hat assets while preserving texture 1:1.
+2. **EDGE SHARPENING**: Perfectly sharpen the hat's silhouette.
+3. **FEATURE PRESERVATION**: Do not blur or remove logos, text (e.g., "N&F"), or stitching patterns from Image 1.
+`.trim();
