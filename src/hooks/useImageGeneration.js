@@ -74,7 +74,7 @@ export const useImageGeneration = (presets, poseImages = {}, slotMetadata = {}) 
         if (!file) return;
 
         // Model Check
-        if (slotId.startsWith('m_') && !config.modelId) {
+        if (slotId.startsWith('m_') && !config.modelId && config.promptSet !== 'B') {
             setError("请先选择一个模特 (Please select a Model Identity)");
             return;
         }
@@ -117,9 +117,10 @@ export const useImageGeneration = (presets, poseImages = {}, slotMetadata = {}) 
             return;
         }
 
-        // Model Check
+        // Model Check: Only strictly enforce Model ID for Set A (Standard)
+        // Set B uses the Persona Engine which might not use 'modelId' from the presets.
         const hasModelImages = Object.keys(viewImages).some(k => k.startsWith('m_'));
-        if (hasModelImages && activeTab === 'model' && !config.modelId) {
+        if (hasModelImages && activeTab === 'model' && !config.modelId && config.promptSet !== 'B') {
             setError("上传了模特展示图，请先选择一个模特 (Model View detected. Please select a Model Identity)");
             return;
         }

@@ -11,6 +11,7 @@ const SuperResolutionPanel = ({ config }) => {
     const [error, setError] = useState('');
     const [progress, setProgress] = useState({ current: 0, total: 0 });
     const [results, setResults] = useState([]);
+    const [isDragging, setIsDragging] = useState(false);
 
     const handleImageUpload = (e) => {
         const files = Array.from(e.target.files || []);
@@ -107,24 +108,38 @@ const SuperResolutionPanel = ({ config }) => {
 
             {/* Upload Area */}
             <div className="space-y-2">
-                <label className="block">
+                <div
+                    className={`block border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer ${isDragging ? 'border-purple-500 bg-purple-500/10' : 'border-slate-700 hover:border-purple-500/50 hover:bg-slate-800/30'
+                        }`}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        if (e.dataTransfer.files) handleImageUpload({ target: { files: e.dataTransfer.files } });
+                    }}
+                    onClick={() => document.getElementById('sr-upload-input').click()}
+                >
                     <input
+                        id="sr-upload-input"
                         type="file"
                         accept="image/*"
                         multiple
                         onChange={handleImageUpload}
                         className="hidden"
                     />
-                    <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 text-center hover:border-purple-500/50 hover:bg-slate-800/30 transition-all cursor-pointer">
-                        <Upload className="w-8 h-8 mx-auto mb-2 text-slate-500" />
-                        <span className="text-sm text-slate-400">点击上传图片 (支持多选)</span>
+                    <div className="pointer-events-none"> {/* Prevent events on children interfering with drag */}
+                        <Upload className={`w-8 h-8 mx-auto mb-2 ${isDragging ? 'text-purple-400' : 'text-slate-500'}`} />
+                        <span className={`text-sm ${isDragging ? 'text-purple-300' : 'text-slate-400'}`}>
+                            {isDragging ? "释放以上传图片" : "点击或拖拽上传图片 (支持多选)"}
+                        </span>
                         {sourceImages.length > 0 && (
                             <div className="text-xs text-purple-400 mt-1">
                                 已选择 {sourceImages.length} 张图片
                             </div>
                         )}
                     </div>
-                </label>
+                </div>
 
                 {/* Image Previews */}
                 {sourceImages.length > 0 && (

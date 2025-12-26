@@ -6,6 +6,7 @@ const ModelDNAPanel = ({ config, setConfig }) => {
     const [dnaImages, setDnaImages] = useState([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResult, setAnalysisResult] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     const handleUpload = (e) => {
         if (e.target.files) {
@@ -33,7 +34,7 @@ const ModelDNAPanel = ({ config, setConfig }) => {
         setIsAnalyzing(true);
         try {
             const files = dnaImages.map(img => img.file);
-            const result = await interrogateImages(files, 'model_dna');
+            const result = await interrogateImages(files, 'model_dna', config);
             setAnalysisResult(result);
 
             // Auto-apply basic fields to config
@@ -107,11 +108,24 @@ const ModelDNAPanel = ({ config, setConfig }) => {
                 ))}
 
                 {dnaImages.length < 6 && (
-                    <label className="aspect-square border-2 border-dashed border-slate-700 rounded-lg flex flex-col items-center justify-center hover:border-pink-500/50 hover:bg-pink-500/5 cursor-pointer transition-all">
-                        <input type="file" multiple accept="image/*" onChange={handleUpload} className="hidden" />
-                        <Upload className="w-5 h-5 text-slate-500 mb-1" />
-                        <span className="text-[9px] text-slate-500">添加参考图</span>
-                    </label>
+                    <div
+                        className={`aspect-square border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer transition-all ${isDragging ? 'border-pink-500 bg-pink-500/10' : 'border-slate-700 hover:border-pink-500/50 hover:bg-pink-500/5'
+                            }`}
+                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragging(false);
+                            if (e.dataTransfer.files) handleUpload({ target: { files: e.dataTransfer.files } });
+                        }}
+                        onClick={() => document.getElementById('dna-upload-input').click()}
+                    >
+                        <input id="dna-upload-input" type="file" multiple accept="image/*" onChange={handleUpload} className="hidden" />
+                        <Upload className={`w-5 h-5 mb-1 ${isDragging ? 'text-pink-400' : 'text-slate-500'}`} />
+                        <span className={`text-[9px] ${isDragging ? 'text-pink-300' : 'text-slate-500'}`}>
+                            {isDragging ? "释放添加" : "拖拽/点击添加"}
+                        </span>
+                    </div>
                 )}
             </div>
 

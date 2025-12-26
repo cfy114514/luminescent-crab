@@ -9,6 +9,7 @@ import { asyncPool } from './core/utils/asyncUtils';
 import { getViewPrompt } from './core/prompts/promptEngine';
 import { generateSingleImageNanoBanana } from './core/adapters/nanoBananaAdapter';
 import { generateSingleImageGemini } from './core/adapters/geminiAdapter';
+import { generateSingleImageOpenAI } from './core/adapters/openaiAdapter';
 
 // --- Main Dispatcher ---
 const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null, config = null) => {
@@ -16,6 +17,12 @@ const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2
     // Determine provider based on URL or Config
     if (apiUrl.includes("nanobanana")) {
         resultUrl = await generateSingleImageNanoBanana(referenceImages, prompt, apiKey, apiUrl, config);
+    } else if (config?.model === 'gemini-3-pro-openai') {
+        // Specific routing for OpenAI Protocol Proxy
+        // User requested to remove hardcoded address separation.
+        // We pass the apiUrl directly. The user is expected to configure the environment 
+        // or the proxy handles the routing/protocol.
+        resultUrl = await generateSingleImageOpenAI(referenceImages, prompt, apiKey, apiUrl, img2imgInput, config);
     } else {
         resultUrl = await generateSingleImageGemini(referenceImages, prompt, apiKey, apiUrl, img2imgInput, config);
     }
@@ -34,15 +41,47 @@ const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2
 };
 
 export const generateImages = async (viewImagesMap, config, onImageGenerated, onStatus, presets = null, poseImagesMap = {}, slotMetadata = {}) => {
-    const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
+    // 1. Determine API Key
+    // If config has a specific selection, use it. Otherwise fallback to env.
+    const selectedKeyMode = config.apiKeySelection || 'key1';
+    let apiKey = '';
+
+    // We expect the UI to pass the actual key value if it fetched it? 
+    // Or does the UI only pass the selection ID ('key1', 'key2')?
+    // The ConfigPanel fetches keys but doesn't store them in 'config' passed here usually (it stores them in local state).
+    // EXCEPT: We need to pass the actual key string to generateSingleImage.
+
+    // Correction: ConfigPanel should probably inject the *actual* key into the config object passed to generateImages?
+    // OR we read from env here if we are server-side? No, we are client-side.
+    // The env vars available to Vite client are: import.meta.env.VITE_Banana_Key_1 etc.
+
+    if (selectedKeyMode === 'key2') {
+        apiKey = import.meta.env.VITE_Banana_Key_2;
+    } else {
+        // Default to Key 1 or Legacy
+        apiKey = import.meta.env.VITE_Banana_Key_1 || import.meta.env.VITE_NANOBANANA_API_KEY;
+    }
+
+    // If still empty, maybe user wants custom? (Not fully implemented in UI selection but good to have)
+    if (!apiKey) {
+        console.warn("[API] No API Key found in env. Ensure VITE_Banana_Key_1 is set.");
+    }
 
     // Dynamic URL Construction based on Config Model
-    let apiUrl = import.meta.env.VITE_API_URL_GENERATOR || import.meta.env.VITE_NANOBANANA_API_URL || '';
-    if (config.model && apiUrl) {
+    let apiUrl = config.customApiUrl || import.meta.env.VITE_API_URL_GENERATOR || import.meta.env.VITE_NANOBANANA_API_URL || '';
+
+    // SPECIAL: Default to local proxy for gemini-3-pro-openai if no custom URL provided
+    if (config.model === 'gemini-3-pro-openai' && !config.customApiUrl) {
+        apiUrl = "http://127.0.0.1:8045/v1";
+    }
+
+    // Only apply Google Model ID injection if it looks like a Google URL (has "models/...")
+    // AND we are not using a custom override (which might be a simple proxy URL)
+    if (config.model && apiUrl && !config.customApiUrl && apiUrl.includes("models/")) {
         apiUrl = apiUrl.replace(/models\/[a-zA-Z0-9-.]+:/, `models/${config.model}:`);
     }
 
-    console.log(`[API] Using Model: ${config.model || 'Default'} -> URL: ${apiUrl}`);
+    console.log(`[API] Using Model: ${config.model || 'Default'} -> URL: ${apiUrl} (Key: ${selectedKeyMode})`);
 
     const updateStatus = (msg) => {
         if (onStatus) onStatus(msg);
@@ -594,12 +633,28 @@ OUTPUT JSON FORMAT (Raw JSON only):
  * @param {Array} imageObjects 
  * @returns {Promise<Object>} Interrogation results (style, prompt, description)
  */
-export const interrogateImages = async (imageObjects, mode = 'styles', contextLabel = '') => {
-    const apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
+export const interrogateImages = async (imageObjects, mode = 'styles', config = {}) => {
+    // Dynamic Key Selection
+    let apiKey = '';
+    const selectedKeyMode = config?.apiKeySelection || 'key1';
+
+    if (selectedKeyMode === 'key2') {
+        apiKey = import.meta.env.VITE_Banana_Key_2;
+    } else if (selectedKeyMode === 'custom') {
+        // For custom, we might fallback to env or require it to be passed? 
+        // Currently the UI says "Custom (Env Fallback)"
+        apiKey = import.meta.env.VITE_Banana_Key_1 || import.meta.env.VITE_NANOBANANA_API_KEY;
+    } else {
+        apiKey = import.meta.env.VITE_Banana_Key_1 || import.meta.env.VITE_NANOBANANA_API_KEY;
+    }
+
+    // Default fallback if logic fails
+    if (!apiKey) apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
+
     const apiUrl = import.meta.env.VITE_API_URL_INTERROGATOR ||
         (import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('gemini-3-pro-image-preview', 'gemini-2.0-flash-exp') : '');
 
-    if (!apiKey || !apiUrl) throw new Error("Missing API Key");
+    if (!apiKey || !apiUrl) throw new Error("Missing API Key or API URL");
 
     const processedImages = await Promise.all(imageObjects.map(async (imgObj) => {
         const file = imgObj.file ? imgObj.file : imgObj;

@@ -7,7 +7,7 @@ export const MODEL_PHYSICAL_LAWS = `
 [MODEL PHYSICAL LAWS]:
 1. **TOP MARGIN**: 1/5 (20%) vertical gap from the top of the canvas to the crown of the head.
 2. **SCALE**: The Subject (Model + Hat) area should occupy approximately 30% of the total canvas area.
-3. **BACKGROUND**: MANDATORY PURE WHITE (#FFFFFF). NO SHADOWS on the background.
+3. **BACKGROUND**: MANDATORY PURE WHITE (#FFFFFF). 
 `.trim();
 
 export const getStrictProtocol = (viewType) => {

@@ -1,0 +1,162 @@
+{
+  "presets": {},
+  "apiKeySelection": "key1",
+  "personaGroups": [
+    {
+      "id": "A",
+      "name": "Vacation/Resort",
+      "description": "High-end summer resort style. Relaxed, airy, luxury.",
+      "keywords": [
+        "vacation",
+        "resort",
+        "straw",
+        "beach",
+        "summer",
+        "holiday"
+      ],
+      "environment": {
+        "lighting": "Soft natural sunlight simulation. Mimics airy resort lighting but in a controlled studio. Gentle fill light.",
+        "background": "Off-white or warm beige seamless paper."
+      },
+      "models": {
+        "female": {
+          "baseBody": "30s Caucasian female. Sun-kissed natural skin texture. Relaxed posture.",
+          "hair": "Low ponytail or loose beach waves.",
+          "makeup": "Natural glow, no heavy contouring.",
+          "outfits": [
+            {
+              "id": "f_a1",
+              "name": "Linen Top",
+              "prompt": "Light-colored linen sleeveless top. Breathable natural fabric texture."
+            },
+            {
+              "id": "f_a2",
+              "name": "Maxi Dress",
+              "prompt": "Flowing white cotton maxi dress. Bohemian resort vibe."
+            }
+          ]
+        },
+        "male": {
+          "baseBody": "35+ Caucasian male. Fit but relaxed. Light stubble.",
+          "hair": "Short neat cut.",
+          "outfits": [
+            {
+              "id": "m_a1",
+              "name": "Linen Shirt",
+              "prompt": "Unbuttoned white linen shirt, sleeves rolled up. Relaxed holiday look."
+            },
+            {
+              "id": "m_a2",
+              "name": "Cotton Tee",
+              "prompt": "High-quality beige cotton T-shirt. Soft texture."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "B",
+      "name": "Outdoor/Utility",
+      "description": "Hiking, camping, and functional gear. REI/Patagonia vibe.",
+      "keywords": [
+        "hiking",
+        "utility",
+        "bucket",
+        "camping",
+        "outdoor",
+        "mountain"
+      ],
+      "environment": {
+        "lighting": "Crisp outdoor morning light simulation. Clear, defined, but no harsh shadows on face.",
+        "background": "Light cool grey or stone color seamless paper."
+      },
+      "models": {
+        "female": {
+          "baseBody": "Latina/Hispanic female, 20s-30s. Athletic build.",
+          "hair": "Practical low ponytail, sporty and neat.",
+          "makeup": "Minimal, fresh, athletic, sweat-proof look.",
+          "outfits": [
+            {
+              "id": "f_b1",
+              "name": "Tech Tee",
+              "prompt": "Olive green moisture-wicking functional T-shirt. Matte technical fabric."
+            },
+            {
+              "id": "f_b2",
+              "name": "Sun Hoodie",
+              "prompt": "Lightweight beige sun-protection hoodie (hood down). Functional output."
+            }
+          ]
+        },
+        "male": {
+          "baseBody": "Latino/Hispanic male, 20s-30s. Rugged, active, clean.",
+          "hair": "Short, practical cut.",
+          "outfits": [
+            {
+              "id": "m_b1",
+              "name": "Utility Vest",
+              "prompt": "Khaki multi-pocket utility vest over a charcoal t-shirt."
+            },
+            {
+              "id": "m_b2",
+              "name": "Quick-Dry Shirt",
+              "prompt": "Navy blue quick-dry outdoor shirt. Button-up, utilitarian style."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "C",
+      "name": "Sport/Golf",
+      "description": "Active luxury, Country Club, Golf, Tennis. Clean and sharp.",
+      "keywords": [
+        "sport",
+        "golf",
+        "visor",
+        "tennis",
+        "running",
+        "active"
+      ],
+      "environment": {
+        "lighting": "Bright, high-key commercial lighting. High visibility, energetic atmosphere.",
+        "background": "Pure white or very faint cool white."
+      },
+      "models": {
+        "female": {
+          "baseBody": "Caucasian female, 25-30. Toned, professional sport look.",
+          "hair": "STRICT Low ponytail, very sleek and tidy.",
+          "makeup": "Polished, active, waterproof look.",
+          "outfits": [
+            {
+              "id": "f_c1",
+              "name": "Pro Polo",
+              "prompt": "White premium performance Polo shirt. Clean lines."
+            },
+            {
+              "id": "f_c2",
+              "name": "Sport Vest",
+              "prompt": "Black athletic breakdown vest over white base layer. High-end sportswear."
+            }
+          ]
+        },
+        "male": {
+          "baseBody": "Caucasian male, 30s. Country club aesthetic.",
+          "hair": "Short, combed back or neat side part.",
+          "outfits": [
+            {
+              "id": "m_c1",
+              "name": "Golf Polo",
+              "prompt": "Premium pique fabric Polo shirt (White or Navy). Subtle piping details."
+            },
+            {
+              "id": "m_c2",
+              "name": "Active Tee",
+              "prompt": "High-end fitted athletic T-shirt. Smooth synthetic blend texture."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
