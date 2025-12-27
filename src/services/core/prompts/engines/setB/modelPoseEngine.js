@@ -1,33 +1,33 @@
-import { SYSTEM_IDENTITY, MASTER_NEGATIVE_ROOT, UNIVERSAL_REFINE_QUALITY } from '../../tree/00_root_integrity';
-import { getHardcoreOrientation, getSurfaceBeautify } from '../../tree/11_model/0_geometry_locks';
-import { BUILD_IDENTITY } from '../../tree/11_model/1_details';
-import { MODEL_PHYSICAL_LAWS, getGenderNegative, MODEL_MASTER_NEGATIVE } from '../../tree/11_model/model_integrity';
-import { getModelLeafPrompt } from '../../tree/11_model/leaves/dispatcher';
-import { ANATOMICAL_IMMERSION } from '../../tree/11_model/0_anatomy';
+import { SYSTEM_IDENTITY, MASTER_NEGATIVE_ROOT, UNIVERSAL_REFINE_QUALITY } from './tree/00_root_integrity';
+import { getHardcoreOrientation, getSurfaceBeautify } from './tree/11_model/0_geometry_locks';
+import { BUILD_IDENTITY } from './tree/11_model/1_details';
+import { MODEL_PHYSICAL_LAWS, getGenderNegative, MODEL_MASTER_NEGATIVE } from './tree/11_model/model_integrity';
+import { getModelLeafPrompt } from './tree/11_model/leaves/dispatcher';
+import { ANATOMICAL_IMMERSION } from './tree/11_model/0_anatomy';
 import { getPersonaGroup, getSetBCharacter, getSetBEnvironment } from './personaConfig';
 
 /**
  * Structural Pose Protocol (Aesthetic Harmony + Symmetry Lock)
  */
 export const getPoseModelPrompt = (config, selectedModel, viewType, genderLabel, isMale, manualPose) => {
-    const orientation = getHardcoreOrientation(viewType);
-    const leafSpecifics = getModelLeafPrompt(viewType);
-    const anatomy = ANATOMICAL_IMMERSION(viewType);
+   const orientation = getHardcoreOrientation(viewType);
+   const leafSpecifics = getModelLeafPrompt(viewType);
+   const anatomy = ANATOMICAL_IMMERSION(viewType);
 
-    // --- SET B SPECIFIC LOGIC ---
-    const personaGroup = getPersonaGroup(config);
-    const characterBlock = getSetBCharacter(personaGroup, isMale, config);
-    const environmentBlock = getSetBEnvironment(personaGroup);
-    // ----------------------------
+   // --- SET B SPECIFIC LOGIC ---
+   const personaGroup = getPersonaGroup(config);
+   const characterBlock = getSetBCharacter(personaGroup, isMale, config);
+   const environmentBlock = getSetBEnvironment(personaGroup);
+   // ----------------------------
 
-    const structuralPrompt = manualPose?.structural_prompt || "";
-    const scalingMandate = manualPose?.scaling_mandate || "";
-    const limbAction = manualPose?.limb_action || "";
-    const expression = manualPose?.facial_expression || "";
+   const structuralPrompt = manualPose?.structural_prompt || "";
+   const scalingMandate = manualPose?.scaling_mandate || "";
+   const limbAction = manualPose?.limb_action || "";
+   const expression = manualPose?.facial_expression || "";
 
-    const isOccluded = expression.toLowerCase().includes("hidden") || expression.toLowerCase().includes("obscured");
+   const isOccluded = expression.toLowerCase().includes("hidden") || expression.toLowerCase().includes("obscured");
 
-    return `
+   return `
 [SYSTEM]: 
 ${SYSTEM_IDENTITY}
 ROLE: High-End E-Commerce Lifestyle Photographer.

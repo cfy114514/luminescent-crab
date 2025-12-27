@@ -4,12 +4,21 @@
  */
 
 import { SLOT_TO_VIEW_TYPE, SLOT_LABELS } from './core/constants';
-import { fileToBase64, processImageToStandardScale } from './core/utils/imageUtils';
+import { fileToBase64, processImageToStandardScale, maskFaceInImage } from './core/utils/imageUtils';
 import { asyncPool } from './core/utils/asyncUtils';
 import { getViewPrompt } from './core/prompts/promptEngine';
 import { generateSingleImageNanoBanana } from './core/adapters/nanoBananaAdapter';
 import { generateSingleImageGemini } from './core/adapters/geminiAdapter';
 import { generateSingleImageOpenAI } from './core/adapters/openaiAdapter';
+import { getReviewerSystemPrompt } from './core/prompts/engines/setC/tree/11_model/visual_anchor_reviewer';
+
+// Module-Level Cache for Visual Anchor Analysis
+// Key: slotId, Value: { file: FileObject, data: String }
+const VISUAL_ANCHOR_CACHE = {};
+
+// Shared Outfit Color Cache for Batch Consistency
+// Stores the outfit color extracted from the FIRST Pose Ref, used by all subsequent generations
+let BATCH_OUTFIT_COLOR = null;
 
 // --- Main Dispatcher ---
 const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null, config = null) => {
@@ -30,10 +39,12 @@ const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2
     // Centralized Post-processing for scaling if it's a product view
     // EXCEPTION: Skip for 'detail' and 'model_*' views.
     // We use 'isModelTask' to ensure manual tags (Front/Back) don't trigger product scaling.
+    // USER TOGGLE: config.enablePostProcessing (default: true for backward compatibility)
     const isModelView = config?.viewType?.startsWith('model_') || config?.isModelTask;
     const isDetailView = config?.viewType === 'detail';
+    const postProcessingEnabled = config?.enablePostProcessing !== false; // Default to true if not set
 
-    if (resultUrl && config?.viewType && !isModelView && !isDetailView) {
+    if (resultUrl && config?.viewType && !isModelView && !isDetailView && postProcessingEnabled) {
         return await processImageToStandardScale(resultUrl);
     }
 
@@ -89,6 +100,10 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
     };
 
     // 0. PRE-FLIGHT
+    // Reset batch outfit color for new batch generation
+    BATCH_OUTFIT_COLOR = null;
+    console.log('[Batch] Starting new batch - outfit color cache reset');
+
     // In Cutout Mode, we skip analysis.
     updateStatus("Processing Uploaded Images...");
 
@@ -147,15 +162,79 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
                         limb_action: poseResult.limb_action,
                         facial_expression: poseResult.facial_expression
                     };
+
+                    // HYBRID SOLUTION: Pass Pose Ref with MASKED FACE
+                    // This preserves pose/composition while forcing new face generation
+                    updateStatus(`Masking face in Pose Ref...`);
+                    const poseBase64Info = await fileToBase64(poseFile);
+                    const maskedPose = await maskFaceInImage(poseBase64Info.data, poseBase64Info.mimeType);
+                    processedImages.push({ ...maskedPose, label: 'POSE REF (FACE MASKED)' });
                 }
 
-                const currentPrompt = getViewPrompt(
+                let currentPrompt = getViewPrompt(
                     task.viewType,
                     { ...config, manualPose }, // Inject extracted pose text
                     [task.label],
                     task.key,
                     presets
                 );
+
+                // --- VISUAL ANCHOR ORCHESTRATION (Set C) ---
+                if (config.promptSet === 'C' && task.isModel) {
+                    // Check Cache
+                    const cacheKey = task.key;
+                    // CRITICAL FIX: Analyze the POSE REF (poseFile), not the Hat Asset (task.file)
+                    const targetAnchorFile = poseFile || task.file;
+                    let anchorData = null;
+
+                    if (VISUAL_ANCHOR_CACHE[cacheKey] && VISUAL_ANCHOR_CACHE[cacheKey].file === targetAnchorFile) {
+                        // Cache Hit
+                        updateStatus(`[Reviewer] Using Cached Analysis for ${task.label}...`);
+                        anchorData = VISUAL_ANCHOR_CACHE[cacheKey].data;
+                    } else {
+                        // Cache Miss - Run Surgical Analysis
+                        updateStatus(`[Reviewer] Running Surgical Analysis on ${task.label}...`);
+                        try {
+                            // Analyze the TARGET ANCHOR FILE (Pose Ref)
+                            anchorData = await interrogateImages([{ file: targetAnchorFile, label: 'Pose Ref' }], 'visual_anchor', config);
+
+                            // Store in Cache
+                            VISUAL_ANCHOR_CACHE[cacheKey] = {
+                                file: targetAnchorFile,
+                                data: anchorData
+                            };
+
+                            // Extract and cache outfit color for batch consistency
+                            if (!BATCH_OUTFIT_COLOR && anchorData) {
+                                const colorMatch = anchorData.match(/OUTFIT_SPEC[^#]*(#[A-Fa-f0-9]{6})/);
+                                if (colorMatch) {
+                                    BATCH_OUTFIT_COLOR = colorMatch[1];
+                                    console.log(`[Batch Outfit Color] Cached: ${BATCH_OUTFIT_COLOR}`);
+                                }
+                            }
+
+                            updateStatus(`[Reviewer] Analysis Complete.`);
+                        } catch (reviewErr) {
+                            console.warn("[Reviewer] Analysis Failed:", reviewErr);
+                            anchorData = "ANALYSIS FAILED. DEFAULT TO GENERIC COMMERCIAL LIGHTING.";
+                        }
+                    }
+
+                    // RE-GENERATE PROMPT WITH ANCHOR DATA + SHARED OUTFIT COLOR
+                    // Update currentPrompt with the enhanced version
+                    currentPrompt = getViewPrompt(
+                        task.viewType,
+                        {
+                            ...config,
+                            manualPose,
+                            visualAnchorData: anchorData,
+                            sharedOutfitColor: BATCH_OUTFIT_COLOR // Inject shared color
+                        },
+                        [task.label],
+                        task.key,
+                        presets
+                    );
+                }
 
                 // 3. Generate
                 updateStatus(`Refining: ${task.label}...`);
@@ -630,7 +709,7 @@ OUTPUT JSON FORMAT (Raw JSON only):
 
 /**
  * Interrogate Reference Images to reverse engineer a prompt.
- * @param {Array} imageObjects 
+ * @param {Array} imageObjects
  * @returns {Promise<Object>} Interrogation results (style, prompt, description)
  */
 export const interrogateImages = async (imageObjects, mode = 'styles', config = {}) => {
@@ -641,8 +720,6 @@ export const interrogateImages = async (imageObjects, mode = 'styles', config = 
     if (selectedKeyMode === 'key2') {
         apiKey = import.meta.env.VITE_Banana_Key_2;
     } else if (selectedKeyMode === 'custom') {
-        // For custom, we might fallback to env or require it to be passed? 
-        // Currently the UI says "Custom (Env Fallback)"
         apiKey = import.meta.env.VITE_Banana_Key_1 || import.meta.env.VITE_NANOBANANA_API_KEY;
     } else {
         apiKey = import.meta.env.VITE_Banana_Key_1 || import.meta.env.VITE_NANOBANANA_API_KEY;
@@ -651,8 +728,13 @@ export const interrogateImages = async (imageObjects, mode = 'styles', config = 
     // Default fallback if logic fails
     if (!apiKey) apiKey = import.meta.env.VITE_NANOBANANA_API_KEY;
 
-    const apiUrl = import.meta.env.VITE_API_URL_INTERROGATOR ||
+    let apiUrl = import.meta.env.VITE_API_URL_INTERROGATOR ||
         (import.meta.env.VITE_NANOBANANA_API_URL ? import.meta.env.VITE_NANOBANANA_API_URL.replace('gemini-3-pro-image-preview', 'gemini-2.0-flash-exp') : '');
+
+    // Force Gemini 2.5 Flash for Reviewer (Visual Anchor) and override URL
+    if (mode === 'visual_anchor') {
+        apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    }
 
     if (!apiKey || !apiUrl) throw new Error("Missing API Key or API URL");
 
@@ -681,7 +763,7 @@ export const interrogateImages = async (imageObjects, mode = 'styles', config = 
     } else if (mode === 'structural_pose') {
         focusAreas = `
 1. **Compositional Harmony**: Describe the subject's position in the frame using visual logic (e.g., "Centered with a high-key focus", "Ample negative space at the top for a minimalist look").
-2. **Subject Presence & Scale**: Relative size of the subject in the view. Is it a tight portrait or a relaxed medium-shot? 
+2. **Subject Presence & Scale**: Relative size of the subject in the view. Is it a tight portrait or a relaxed medium-shot?
 3. **Anatomical Flow**: The natural angle of the head and shoulders. Use visual directions (e.g., "Gazing towards the upper left", "Shoulders relaxed and slightly tilted").
 4. **Limb & Hand Rhythm**: Describe the action of the hands naturally (e.g., "A gentle hand resting on the hat's edge").
 5. **Demeanor & Occlusion (神态与遮挡)**: The emotional soul of the reference. CRITICAL: Identify if the face or eyes are HIDDEN by the hat brim (e.g., "Eyes are completely obscured by the shadow of the brim", "Only the lower jaw is visible").
@@ -719,7 +801,7 @@ export const interrogateImages = async (imageObjects, mode = 'styles', config = 
 }
 `;
     } else if (mode === 'product_category') {
-        const categoryName = contextLabel || "Product";
+        const categoryName = config.contextLabel || "Product"; // Assuming contextLabel can be passed in config
         focusAreas = `
 1. **Structural Integrity**: Define the rigid shape rules for a "${categoryName}".
 2. **Material Logic**: Common materials and textures specific to this category.
@@ -747,7 +829,7 @@ export const interrogateImages = async (imageObjects, mode = 'styles', config = 
 `;
     }
 
-    const systemPrompt = `
+    let systemPrompt = `
 You are a Professional Prompt Engineer specialized in Stable Diffusion and Midjourney.
 Analyze the provided reference images and reverse-engineer specific fragments of a Master Prompt.
 
@@ -762,6 +844,11 @@ ${outputSchema}
 Output RAW JSON ONLY. No markdown blocks.
 `.trim();
 
+    // SPECIAL OVERRIDE FOR VISUAL ANCHOR (Surgical Reviewer)
+    if (mode === 'visual_anchor') {
+        systemPrompt = await getReviewerSystemPrompt(); // Await the async function
+    }
+
     let parts = [{ text: systemPrompt }];
     processedImages.forEach((img, idx) => {
         parts.push({ text: `Style Reference Image ${idx + 1}:` });
@@ -771,6 +858,7 @@ Output RAW JSON ONLY. No markdown blocks.
     });
 
     const isGoogle = apiUrl.includes('googleapis.com');
+    // FIX: Remove spaces from query parameters
     const endpoint = isGoogle && !apiUrl.includes("key=") ? `${apiUrl}?key=${apiKey}` : apiUrl;
 
     const response = await fetch(endpoint, {
@@ -779,10 +867,17 @@ Output RAW JSON ONLY. No markdown blocks.
         body: JSON.stringify({ contents: [{ parts: parts }] })
     });
 
-    if (!response.ok) throw new Error(`Interrogation Failed: ${response.status}`);
+    if (!response.ok) throw new Error(`Interrogation Failed: ${response.status} `);
 
     const data = await response.json();
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+    // SPECIAL BYPASS: For Visual Anchor Reviewer, we WANT the raw text report.
+    // The prompt engine injects it directly. We do not need JSON.
+    if (mode === 'visual_anchor') {
+        console.log("[Interrogator] Visual Anchor Report received (Raw Text).");
+        return resultText;
+    }
 
     // Robust JSON extraction (removes Markdown code blocks and extra text)
     let cleanedText = resultText.trim();

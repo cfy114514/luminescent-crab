@@ -1,8 +1,8 @@
-import { SYSTEM_IDENTITY, MASTER_NEGATIVE_ROOT, UNIVERSAL_REFINE_QUALITY } from '../../tree/00_root_integrity';
-import { getHardcoreOrientation, getSurfaceBeautify } from '../../tree/11_model/0_geometry_locks';
-import { BUILD_IDENTITY } from '../../tree/11_model/1_details';
-import { getStrictProtocol, getGenderNegative, MODEL_MASTER_NEGATIVE } from '../../tree/11_model/model_integrity';
-import { getModelLeafPrompt } from '../../tree/11_model/leaves/dispatcher';
+import { SYSTEM_IDENTITY, MASTER_NEGATIVE_ROOT, UNIVERSAL_REFINE_QUALITY } from './tree/00_root_integrity';
+import { getHardcoreOrientation, getSurfaceBeautify } from './tree/11_model/0_geometry_locks';
+import { BUILD_IDENTITY } from './tree/11_model/1_details';
+import { getStrictProtocol, getGenderNegative, MODEL_MASTER_NEGATIVE } from './tree/11_model/model_integrity';
+import { getModelLeafPrompt } from './tree/11_model/leaves/dispatcher';
 
 /**
  * Standard Model Generation Protocol (Strict Orientation Sync)

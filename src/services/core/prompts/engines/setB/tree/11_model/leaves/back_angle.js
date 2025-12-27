@@ -1,0 +1,3 @@
+export const LEAF_PROMPT_MODEL_BACK_ANGLE = `
+- **BACK-ANGLED OBLIQUE VIEW SPECIFIC**: This is a BACK-ANGLED OBLIQUE perspective. The camera is positioned BEHIND and to the SIDE of the model (approximately 135° angle - between back and side view). Show: back of the head, back of one shoulder prominently, partial side profile of torso. The model's face should be mostly HIDDEN or only show a sliver of the side profile. This is NOT a front view, NOT a side view - it's specifically a back-oblique angle showing primarily the BACK with slight side visibility. The hat should be viewed from this back-angled perspective.
+`;

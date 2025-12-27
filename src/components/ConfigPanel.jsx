@@ -130,15 +130,21 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
                     <div className="flex bg-slate-900/80 rounded-lg p-1 border border-slate-700">
                         <button
                             onClick={() => handleChange('promptSet', 'A')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet !== 'B' ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'A' || (!config.promptSet) ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
                         >
-                            <span className="flex items-center gap-2">Standard (Set A)</span>
+                            <span className="flex items-center gap-1">Standard (A)</span>
                         </button>
                         <button
                             onClick={() => handleChange('promptSet', 'B')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'B' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'B' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
                         >
-                            <span className="flex items-center gap-2"><Sparkles className="w-3 h-3" /> Lifestyle (Set B)</span>
+                            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> Lifestyle (B)</span>
+                        </button>
+                        <button
+                            onClick={() => handleChange('promptSet', 'C')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'C' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <span className="flex items-center gap-1">🎭 Compositor (C)</span>
                         </button>
                     </div>
                 </div>
@@ -223,20 +229,44 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
 
             {/* 2. Context & Engine Settings (Conditional) */}
             <div className="space-y-4 pb-4 border-b border-slate-700/50">
-                {config.promptSet === 'B' ? (
-                    // === SET B UI ===
+                {(config.promptSet === 'B' || config.promptSet === 'C') ? (
+                    // === SET B / SET C UI (Shared Persona Engine) ===
                     <div className="animate-in fade-in duration-300 space-y-4">
-                        <div className="flex items-center gap-2 p-3 bg-cyan-900/10 border border-cyan-500/20 rounded-lg">
-                            <Zap className="w-4 h-4 text-cyan-400" />
+                        <div className={`flex items-center gap-2 p-3 rounded-lg border ${config.promptSet === 'C' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-cyan-900/10 border-cyan-500/20'}`}>
+                            <Zap className={`w-4 h-4 ${config.promptSet === 'C' ? 'text-amber-400' : 'text-cyan-400'}`} />
                             <div className="flex-1">
-                                <h4 className="text-xs font-bold text-cyan-300">Set B 已激活: 自动化角色引擎</h4>
-                                <p className="text-[10px] text-cyan-200/60">
-                                    系统将根据下方关键词自动选择度假、户外或高尔夫角色。
+                                <h4 className={`text-xs font-bold ${config.promptSet === 'C' ? 'text-amber-300' : 'text-cyan-300'}`}>
+                                    {config.promptSet === 'C' ? 'Set C 已激活: Compositor 模式 (换脸换帽)' : 'Set B 已激活: 自动化角色引擎'}
+                                </h4>
+                                <p className={`text-[10px] ${config.promptSet === 'C' ? 'text-amber-200/60' : 'text-cyan-200/60'}`}>
+                                    {config.promptSet === 'C'
+                                        ? '使用参考图底板，仅替换头部 (帽子 + 脸部)。'
+                                        : '系统将根据下方关键词自动选择度假、户外或高尔夫角色。'}
                                 </p>
                             </div>
                         </div>
 
-                        {/* Persona Manager */}
+                        {/* Clone Mode Toggle - SET C ONLY */}
+                        {config.promptSet === 'C' && (
+                            <div className="flex items-center justify-between py-2 px-3 bg-amber-900/20 rounded-lg border border-amber-500/30">
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-amber-300">🔗 Clone Mode (克隆模式)</span>
+                                    <span className="text-[10px] text-amber-200/60">
+                                        完全克隆参考图的姿势 + 着装，仅替换脸部和帽子
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={() => handleChange('cloneOutfitFromRef', !config.cloneOutfitFromRef)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.cloneOutfitFromRef ? 'bg-amber-500' : 'bg-slate-700'}`}
+                                >
+                                    <span
+                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.cloneOutfitFromRef ? 'translate-x-5' : 'translate-x-1'}`}
+                                    />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Persona Manager (Shared between Set B and Set C) */}
                         <PersonaManagementPanel config={config} setConfig={setConfig} />
                     </div>
                 ) : (
@@ -419,6 +449,22 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
 
             {/* 4. Post-Processing & Creativity */}
             <div className="space-y-4">
+                {/* Post-Processing Toggle */}
+                <div className="flex items-center justify-between py-2 px-3 bg-slate-900/30 rounded-lg border border-slate-700/30">
+                    <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-300">自动缩放 (Auto Scale)</span>
+                        <span className="text-[10px] text-slate-500">产品图后处理，自动居中缩放至 78%</span>
+                    </div>
+                    <button
+                        onClick={() => handleChange('enablePostProcessing', config.enablePostProcessing === false ? true : false)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.enablePostProcessing !== false ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                    >
+                        <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.enablePostProcessing !== false ? 'translate-x-5' : 'translate-x-1'}`}
+                        />
+                    </button>
+                </div>
+
                 {/* Creativity Slider */}
                 <div className="flex items-center gap-4">
                     <label className="text-[10px] uppercase text-pink-500 font-bold w-12 text-right">Creativity</label>

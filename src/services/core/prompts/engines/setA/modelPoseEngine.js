@@ -1,9 +1,9 @@
-import { SYSTEM_IDENTITY, MASTER_NEGATIVE_ROOT, UNIVERSAL_REFINE_QUALITY } from '../../tree/00_root_integrity';
-import { getHardcoreOrientation, getSurfaceBeautify } from '../../tree/11_model/0_geometry_locks';
-import { BUILD_IDENTITY } from '../../tree/11_model/1_details';
-import { MODEL_PHYSICAL_LAWS, getGenderNegative, MODEL_MASTER_NEGATIVE } from '../../tree/11_model/model_integrity';
-import { getModelLeafPrompt } from '../../tree/11_model/leaves/dispatcher';
-import { ANATOMICAL_IMMERSION } from '../../tree/11_model/0_anatomy';
+import { SYSTEM_IDENTITY, MASTER_NEGATIVE_ROOT, UNIVERSAL_REFINE_QUALITY } from './tree/00_root_integrity';
+import { getHardcoreOrientation, getSurfaceBeautify } from './tree/11_model/0_geometry_locks';
+import { BUILD_IDENTITY } from './tree/11_model/1_details';
+import { MODEL_PHYSICAL_LAWS, getGenderNegative, MODEL_MASTER_NEGATIVE } from './tree/11_model/model_integrity';
+import { getModelLeafPrompt } from './tree/11_model/leaves/dispatcher';
+import { ANATOMICAL_IMMERSION } from './tree/11_model/0_anatomy';
 
 /**
  * Structural Pose Protocol (Aesthetic Harmony + Symmetry Lock)

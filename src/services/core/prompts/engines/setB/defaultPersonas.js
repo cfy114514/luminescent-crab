@@ -23,8 +23,10 @@ export const DEFAULT_PERSONA_GROUPS = [
                 ]
             },
             male: {
-                baseBody: '35+ Caucasian male. Fit but relaxed. Light stubble.',
-                hair: 'Short neat cut.',
+                baseBody: 'Caucasian male, 35-45 years old. Head circumference 58cm. Height 178-185cm, Weight 80-90kg. Fit but relaxed build. Mature, confident presence.',
+                hair: 'Short hair, neat and low-maintenance.',
+                grooming: 'Light stubble or clean-shaven. Resort-ready grooming.',
+                vibe: 'Resort / Casual / Mature. Relaxed luxury, effortless style.',
                 outfits: [
                     { id: 'm_a1', name: 'Linen Shirt', prompt: 'Unbuttoned white linen shirt, sleeves rolled up. Relaxed holiday look.' },
                     { id: 'm_a2', name: 'Cotton Tee', prompt: 'High-quality beige cotton T-shirt. Soft texture.' }

@@ -43,11 +43,10 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
         });
     }
 
-    // Parse Resolution
-    let width = 1024;
-    let height = 1024;
-    if (config?.imageSize === '2K') { width = 2048; height = 2048; }
-    if (config?.imageSize === '4K') { width = 4096; height = 4096; }
+
+    // Parse Resolution - Official Format: "1K", "2K", "4K"
+    const imageSize = config?.imageSize === '2K' ? '2K' : config?.imageSize === '4K' ? '4K' : '1K';
+    const aspectRatio = '1:1'; // Default to square
 
     const payload = {
         contents: [{ parts: parts }],
@@ -56,11 +55,26 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
             topK: creativity < 20 ? 1 : 40,
             topP: 0.9,
             maxOutputTokens: 2048,
+            // Official Gemini Image Generation Config (REST API uses camelCase!)
+            responseModalities: ['Image'], // Request image-only response
+            imageConfig: {
+                imageSize: imageSize,  // "1K", "2K", "4K"
+                aspectRatio: aspectRatio  // "1:1", "3:4", "16:9", etc.
+            }
         }
     };
 
+
     console.log(`[Gemini] Sending Request to ${apiUrl}... (Img2Img: ${!!img2imgInput})`);
+    console.log("[Gemini Creativity Params]:", {
+        creativity: creativity,
+        temperature: effectiveTemp,
+        topK: payload.generationConfig.topK,
+        topP: payload.generationConfig.topP
+    });
     console.log("[Gemini Request Prompt]:", parts[0]?.text); // Show exact text prompt
+    console.log("[Gemini Request Payload]:", JSON.stringify(payload, null, 2)); // Show full payload
+
 
 
     const response = await fetch(apiUrl, {
@@ -83,7 +97,10 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
         const imagePart = parts.find(p => p.inline_data || p.inlineData);
         if (imagePart) {
             const blob = imagePart.inline_data || imagePart.inlineData;
-            return `data:${blob.mime_type || blob.mimeType};base64,${blob.data}`;
+            const mimeType = blob.mime_type || blob.mimeType;
+            const dataSizeKB = Math.round(blob.data.length * 0.75 / 1024); // Base64 decodes to ~75% of original length
+            console.log(`[Gemini Response] Image received: ${mimeType}, ~${dataSizeKB} KB (decoded)`);
+            return `data:${mimeType};base64,${blob.data}`;
         }
     }
 

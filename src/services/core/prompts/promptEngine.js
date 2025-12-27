@@ -1,5 +1,5 @@
 // === Main Dispatcher for View Prompts ===
-// We now support branching (Set A / Set B)
+// We now support branching (Set A / Set B / Set C)
 // By default, we use Set A.
 import * as SetA_Standard from './engines/setA/modelStandardEngine';
 import * as SetA_Pose from './engines/setA/modelPoseEngine';
@@ -9,20 +9,22 @@ import * as SetB_Standard from './engines/setB/modelStandardEngine';
 import * as SetB_Pose from './engines/setB/modelPoseEngine';
 import * as SetB_Product from './engines/setB/productStandardEngine';
 
+import * as SetC_Reference from './engines/setC/modelReferenceEngine';
+
 /**
  * Main Entry Point for Prompt Generation
  */
 export const getViewPrompt = (viewType, config, availableLabels = [], taskKey = '', presets = null, contextTag = '') => {
     // 0. Determine Prompt Set (Default 'A')
-    const useSetB = config.promptSet === 'B';
-    const StandardEngine = useSetB ? SetB_Standard : SetA_Standard;
-    const PoseEngine = useSetB ? SetB_Pose : SetA_Pose;
-    const ProductEngine = useSetB ? SetB_Product : SetA_Product;
+    const isSetB = config.promptSet === 'B';
+    const isSetC = config.promptSet === 'C';
 
     // 1. Determine Task Type
     const isModelTask = taskKey.startsWith('m_');
 
     if (!isModelTask) {
+        // Product Task - Set C doesn't apply to product, fallback to B or A
+        const ProductEngine = isSetB ? SetB_Product : SetA_Product;
         return ProductEngine.getProductStandardPrompt(config, viewType);
     }
 
@@ -35,7 +37,17 @@ export const getViewPrompt = (viewType, config, availableLabels = [], taskKey = 
 
     const genderLabel = isMale ? "Male" : "Female";
 
-    // DECISION LOGIC: Are we doing a Pose Reference or a Standard Asset Projection?
+    // DECISION LOGIC: Set C always uses Reference Engine (for Compositor mode)
+    if (isSetC) {
+        // Set C: VFX Compositor (Hat Swap + Face Swap)
+        // Uses the reference image as base plate.
+        return SetC_Reference.getReferenceModelPrompt(config, selectedModel, viewType, genderLabel, isMale, config.manualPose, config.visualAnchorData);
+    }
+
+    // Set A / Set B Logic
+    const StandardEngine = isSetB ? SetB_Standard : SetA_Standard;
+    const PoseEngine = isSetB ? SetB_Pose : SetA_Pose;
+
     // If we have manualPose (extracted from a pose reference), use the Pose Engine.
     if (config.manualPose) {
         return PoseEngine.getPoseModelPrompt(config, selectedModel, viewType, genderLabel, isMale, config.manualPose);

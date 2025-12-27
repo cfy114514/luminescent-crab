@@ -21,7 +21,7 @@ function App() {
   const [config, setConfig] = useState({
     creativity: 20, // Default to Low Creativity (Strict Mode)
     model: 'gemini-2.5-flash-image', // Default Model
-    ethnicity: 'asian',
+    ethnicity: 'caucasian',
     gender: 'female',
     categoryId: 'hat', // Default Category
     modelId: '', // Model Identity Preset
