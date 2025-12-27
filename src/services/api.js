@@ -128,7 +128,13 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
 
     if (totalTasks > 0) {
         const CONCURRENCY_LIMIT = 4;
-        updateStatus(`Starting Parallel Processing (${totalTasks} files)...`);
+
+        // IMPORTANT: Process FIRST task separately to cache outfit color before parallel batch
+        // This ensures all subsequent tasks use the same outfit color
+        const firstTask = tasks[0];
+        const remainingTasks = tasks.slice(1);
+
+        updateStatus(`Analyzing first reference for color consistency...`);
 
         const results = await asyncPool(CONCURRENCY_LIMIT, tasks, async (task) => {
             try {

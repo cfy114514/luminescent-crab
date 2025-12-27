@@ -111,7 +111,7 @@ ${config.visualAnchorData}
 2. **NO TEXT/WATERMARKS**: The output must be clean.
 3. **NO BACKGROUND ARTIFACTS**: The background is PURE WHITE (#FFFFFF). Do not hallucinate gradients, shadows, or studio equipment.
 4. **OUTFIT COLOR LOCK** (MANDATORY FOR ALL BATCH GENERATIONS):
-   - **COLOR**: ${config.sharedOutfitColor || config.visualAnchorData?.match(/OUTFIT_SPEC[^#]*(#[A-Fa-f0-9]{6})/)?.[1] || 'Light Blue Linen'}
+   - **COLOR**: ${config.sharedOutfitColor || 'Light Blue Linen #B7C4CA'}
    - **RULE**: ALL images in this batch MUST use this EXACT outfit color. Do NOT vary the color.
 
 [FINAL RENDER RULES - COMMERCIAL LIFESTYLE]:
@@ -121,6 +121,8 @@ ${config.visualAnchorData}
 - **ANTI-SYMMETRY**: Respect the natural shape of the hat. Do NOT force symmetry on asymmetrical designs.
 
 [NEGATIVES]: ${MASTER_NEGATIVE_ROOT} ${MODEL_MASTER_NEGATIVE}
+(grey background: 5.0), (gray background: 5.0), (gradient background: 5.0), (studio background: 4.0), (colored background: 5.0),
+(outdoor: 5.0), (nature: 4.0), (sky: 5.0), (clouds: 5.0), (trees: 5.0), (window: 4.0), (room: 4.0),
 (altering the outfit: 2.0), (changing the shirt: 2.0), (generating a neck: 2.0),
 (painting over the collar: 2.0), (3d render: 1.5), (cartoon: 1.5), (illustration: 1.5),
 (mirroring), (flipping), (rotating body),
