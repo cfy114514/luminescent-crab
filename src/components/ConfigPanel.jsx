@@ -465,6 +465,22 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
                     </button>
                 </div>
 
+                {/* Color Correction Toggle */}
+                <div className="flex items-center justify-between py-2 px-3 bg-slate-900/30 rounded-lg border border-slate-700/30">
+                    <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-300">颜色校正 (Color Correction)</span>
+                        <span className="text-[10px] text-slate-500">基于首张参考图校正生成图颜色</span>
+                    </div>
+                    <button
+                        onClick={() => handleChange('enableColorCorrection', config.enableColorCorrection === false ? true : false)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.enableColorCorrection !== false ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                    >
+                        <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.enableColorCorrection !== false ? 'translate-x-5' : 'translate-x-1'}`}
+                        />
+                    </button>
+                </div>
+
                 {/* Creativity Slider */}
                 <div className="flex items-center gap-4">
                     <label className="text-[10px] uppercase text-pink-500 font-bold w-12 text-right">Creativity</label>

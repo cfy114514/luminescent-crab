@@ -11,16 +11,18 @@ GLOBAL LIGHTING: MANDATORY TOP-RIGHT softlight SOURCE. Main studio light is fixe
 
 export const LEGACY_V1_STRICT_PROTOCOL = `
 STRICT PROTOCOL (ZERO CREATIVITY ON STRUCTURE):
-1. **GEOMETRY & ORIENTATION LOCK**: You are a texture projection engine, NOT a creative artist. The hat's 3D orientation, angle, and core structure are FROZEN. Do NOT rotate, tilt, or reposition the hat in any way.
-2. **STRUCTURAL PRESERVATION**: The shape, silhouette, brim angle, crown height, and all major structural elements MUST match the reference EXACTLY. If the reference has a flat brim, generate a flat brim. If curved, generate curved.
-3. **ALLOWED BEAUTIFICATION (DECORATIVE ONLY)**: You MAY beautify decorative accessories and edges:
-   - Bow/ribbon refinement: Smooth wrinkles in bows, make them more symmetrical and neat.
-   - Edge finishing: Clean up frayed edges, tidy loose threads.
-   - Surface polish: Remove dust, lint, and minor imperfections.
-   FORBIDDEN: Do NOT change the bow's position, size ratio, or color. Do NOT add new decorative elements.
-4. **DIGITAL RESTORATION**: **STEAM & IRON** the fabric. Remove major wrinkles and dents. "Puff" out sunken areas to look brand new.
+1. **COLOR ACCURACY (CRITICAL)**: Copy the EXACT colors from the input image. NO lightening, NO darkening, NO desaturation, NO hue shift. The output hat must be visually identical in color.
+2. **GEOMETRY & ORIENTATION LOCK**: You are a texture projection engine, NOT a creative artist. The hat's 3D orientation, angle, and core structure are FROZEN. Do NOT rotate, tilt, or reposition the hat in any way.
+3. **STRUCTURAL PRESERVATION**: The shape, silhouette, brim angle, crown height, and all major structural elements MUST match the reference EXACTLY. If the reference has a flat brim, generate a flat brim. If curved, generate curved.
+4. **MANDATORY BEAUTIFICATION**:
+   - **CLEAN**: Remove dust, lint, threads, tags, labels, stickers.
+   - **STEAM & IRON**: Remove all wrinkles, creases, dents. "Puff out" deflated areas.
+   - **RIBBON/BAND**: Straighten decorative elements, make symmetrical and neat.
+   - The hat should look BRAND NEW, ready for catalog photography.
 5. **MATERIAL TRUTH**: The weave/fabric texture must be IDENTICAL to the reference, but cleaner and higher resolution (Denoised).
-6. **CLEAN BACKGROUND**: **PURE WHITE (HEX #FFFFFF)**. Natural contact shadows are ALLOWED to ground the object.
+6. **PURE WHITE BACKGROUND (CRITICAL - NO EXCEPTIONS)**:
+   - Background MUST be **PURE WHITE #FFFFFF (RGB 255,255,255)** everywhere.
+   - Contact shadow under product is ALLOWED, but edges must be pure white.
 7. **No Text/Watermarks**: Do not render text overlaps.
 `.trim();
 
@@ -42,8 +44,10 @@ STRICT PROTOCOL (USER DEFINED):
 `.trim();
 
 export const LEGACY_V1_PRODUCT_NEGATIVES = `
+(grey background:5.0), (gray background:5.0), (off-white background:5.0), (gradient background:5.0), (vignette:5.0),
+(shadow on edges:4.0), (dark corners:4.0), (uneven background:4.0), (beige background:4.0),
 (wrong orientation:2.0), (rotated hat:2.0), (tilted:2.0), (wrinkles:1.3), (creases:1.3), (dust:1.3), (lint:1.3), 
-gray background, off-white, studio floor, vignette, drawing, painting, illustration, 3d render, sketch, low quality, 
+studio floor, drawing, painting, illustration, 3d render, sketch, low quality, 
 hanging tag, price label, security tag, plastic loop, extra bow, extra knot, missing bow, bow in wrong position,
 model, person, face, skin, mannequin, hand, body, arm, (headshot:5.0), (portrait:5.0)
 `.trim();

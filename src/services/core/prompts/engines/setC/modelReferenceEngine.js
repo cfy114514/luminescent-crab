@@ -10,6 +10,16 @@ import { getPersonaGroup, getSetBCharacter, getSetBEnvironment } from '../setB/p
  */
 export const getReferenceModelPrompt = (config) => `
 [SYSTEM]:
+
+[HAT RULES - MANDATORY - READ FIRST]:
+**BEFORE GENERATING, YOU MUST:**
+1. **COPY COLOR EXACTLY** from Image 1. NO lightening, NO darkening, NO desaturation.
+2. **CLEAN THE HAT**: Remove dust, lint, threads, tags.
+3. **FIX DEFORMATIONS**: If crown deflated → inflate it. If brim droopy → straighten it.
+4. **SCALE PROPERLY**: Hat on 56cm mannequin → fit adult head (55-58cm).
+
+**IF THE OUTPUT HAT LOOKS DIFFERENT FROM IMAGE 1 IN COLOR OR CLEANLINESS = FAILURE.**
+
 [GLOBAL SYSTEM CONTEXT]:
 1. ASPECT RATIO: ${config.aspectRatio || '1:1 (PERFECT SQUARE)'}.
 2. RESOLUTION: 2048x2048 (2K HD).
@@ -69,8 +79,12 @@ ${config.visualAnchorData}
    
    **PERSONA TO GENERATE**:
    - **ETHNICITY**: ${config.ethnicity || 'Caucasian'} (STRICT - Generate authentic ${config.ethnicity || 'Caucasian'} facial features)
-   - **GENDER**: ${config.gender || config.modelDna?.predicted_gender || 'Male'}
+   - **GENDER**: ${config.gender || config.modelDna?.predicted_gender || 'female'}
    - **AGE**: 35-45 years old, mature professional appearance
+   ${(config.gender || 'female').toLowerCase() === 'female' ? `- **HAIR (FEMALE ONLY - CONSISTENT FOR BATCH)**:
+     - **COLOR**: Dark brown
+     - **STYLE**: Long, wavy, natural
+     - **RULE**: All female models in this batch should have similar hair.` : ''}
    - **APPEARANCE**: Commercial model, confident, natural expression
    
    **EXECUTION**:
@@ -90,29 +104,57 @@ ${config.visualAnchorData}
    - **PLACEMENT**: Composite onto the head.
    - **PERSPECTIVE**: Match the 2D head angle of the Base Plate.
    
-   [HAT INVENTORY - ABSOLUTE FIDELITY]:
-   **CRITICAL**: The Hat Asset (Image 1) is your SOURCE OF TRUTH. Do NOT deviate from it.
-   - **NO ELEMENT ADDITION**: Do NOT add buckles, pins, feathers, bands, buttons, or decorations not present in Image 1.
-   - **NO ELEMENT REMOVAL**: Do NOT remove features that exist in Image 1.
-   - **MATERIAL PRESERVATION**: The material (straw, felt, canvas, etc.) MUST remain unchanged. Do NOT transform straw to felt or vice versa.
-   - **GEOMETRY CLONE**: The hat's shape, brim angle, crown height, and proportions must be IDENTICAL to Image 1.
-   - **TEXTURE FIDELITY**: Preserve the weave pattern, stitching, and surface texture of the original material.
+   [HAT INVENTORY - FIDELITY WITH BEAUTIFICATION]:
+   **The Hat Asset (Image 1) is your REFERENCE. Apply beautification while preserving identity.**
    
-   [DIGITAL HAT FINISHING - MICRO-ADJUSTMENTS ONLY]:
-   **RULE**: Enhance the hat's appearance, but do NOT alter its fundamental structure.
-   1. **SURFACE SMOOTHING**: Remove visible wrinkles, dents, and creases - but keep the original material weave visible.
-   2. **SHAPE REFINEMENT**: Correct minor drooping/sagging, but do NOT redesign the hat shape.
-   3. **NO REDESIGN**: This is TOUCH-UP, not REDESIGN. If the hat has a bent brim, keep it bent. If it has asymmetric features by design, preserve them.
-   4. **MATERIAL UNCHANGED**: The output hat must be the SAME MATERIAL as Image 1. Straw stays straw. Felt stays felt.
-   5. **LIGHTING ONLY**: Adjust brightness/shadows, but do NOT change the hat's color or texture.
+   **PRESERVE (DO NOT CHANGE)**:
+   - **DESIGN IDENTITY**: The hat type, style, and design must match Image 1.
+   - **COLOR**: Copy the EXACT colors from Image 1. The uploaded image is color-accurate. Do NOT lighten, darken, desaturate, or shift the hue.
+   - **NO ELEMENT ADDITION**: Do NOT add decorations not present in Image 1.
+   - **NO ELEMENT REMOVAL**: Do NOT remove features that exist in Image 1.
+   - **MATERIAL**: The material (straw, felt, canvas, etc.) MUST remain unchanged.
+   
+   **CAN BE ADJUSTED (BEAUTIFICATION ALLOWED)**:
+   - **SHAPE**: If crown/brim appears deformed in Image 1, CORRECT IT to look proper.
+   - **SURFACE**: Remove wrinkles, dents, creases - make it look pristine.
+   - **SCALE**: The mannequin in Image 1 is 56cm. Scale to fit adult head (55-58cm) proportionally.
+   
+   **SCALING RULE**:
+   - Do NOT just copy the hat at its original pixel size.
+   - The hat must look PROPORTIONALLY CORRECT on the model's head.
+   - Not too big (covering face), not too small (perched on top).
+   
+   [MANDATORY HAT BEAUTIFICATION - ALWAYS APPLY]:
+   **THIS IS REQUIRED. DO NOT SKIP.**
+   
+   1. **CLEANING**: 
+      - Remove visible dust, lint, pet hair, and loose threads.
+      - The hat surface should look freshly cleaned.
+   
+   2. **LIGHT RESHAPING**: 
+      - If crown appears deflated or misshapen → restore to proper shape.
+      - If brim appears droopy or warped → restore to designed angle.
+      - Apply gentle correction, NOT radical redesign.
+   
+   3. **RIBBON/BAND ALIGNMENT**:
+      - Any ribbon, band, or decorative trim must face correct direction.
+      - Must lie flat and smooth, not twisted or bunched.
+   
+   4. **HIDE TAGS**:
+      - Remove or hide any visible price tags, hang tags, barcode stickers.
+      - Remove or hide production labels, care labels that are visible.
+   
+   5. **COLOR ACCURACY**:
+      - Output hat color must EXACTLY match Image 1.
+      - NO color cast, NO saturation shift, NO hue drift.
 
 [ANTI-HALLUCINATION PROTOCOL]:
 1. **NO INVENTED DETAILS**: Do NOT add accessories (glasses, jewelry, scarves) unless present in the Base Plate.
 2. **NO TEXT/WATERMARKS**: The output must be clean.
 3. **NO BACKGROUND ARTIFACTS**: The background is PURE WHITE (#FFFFFF). Do not hallucinate gradients, shadows, or studio equipment.
 4. **OUTFIT COLOR LOCK** (MANDATORY FOR ALL BATCH GENERATIONS):
-   - **COLOR**: ${config.sharedOutfitColor || 'Light Blue Linen #B7C4CA'}
-   - **RULE**: ALL images in this batch MUST use this EXACT outfit color. Do NOT vary the color.
+   - **COLOR**: ${config.sharedOutfitColor || 'Match the top/shirt color EXACTLY as shown in the Pose Ref image. Do NOT change the outfit color.'}
+   - **RULE**: ALL images in this batch MUST use the EXACT same outfit color as the Pose Ref. Do NOT vary.
 
 [FINAL RENDER RULES - COMMERCIAL LIFESTYLE]:
 - **STYLE**: Commercial Lifestyle Photography. Natural, Clean, Premium. Non-posey.
@@ -121,6 +163,9 @@ ${config.visualAnchorData}
 - **ANTI-SYMMETRY**: Respect the natural shape of the hat. Do NOT force symmetry on asymmetrical designs.
 
 [NEGATIVES]: ${MASTER_NEGATIVE_ROOT} ${MODEL_MASTER_NEGATIVE}
+(faded hat color: 5.0), (washed out hat: 5.0), (color shift on hat: 5.0), (lighter hat color: 4.0), (desaturated hat: 4.0),
+(wrinkled hat: 5.0), (creased hat: 5.0), (dented hat: 5.0), (folded hat: 5.0), (deflated crown: 5.0),
+(saggy hat: 4.0), (droopy brim: 4.0), (wavy brim: 4.0), (compressed hat: 4.0), (storage damage: 4.0),
 (grey background: 5.0), (gray background: 5.0), (gradient background: 5.0), (studio background: 4.0), (colored background: 5.0),
 (outdoor: 5.0), (nature: 4.0), (sky: 5.0), (clouds: 5.0), (trees: 5.0), (window: 4.0), (room: 4.0),
 (altering the outfit: 2.0), (changing the shirt: 2.0), (generating a neck: 2.0),

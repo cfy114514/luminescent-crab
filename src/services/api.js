@@ -4,7 +4,7 @@
  */
 
 import { SLOT_TO_VIEW_TYPE, SLOT_LABELS } from './core/constants';
-import { fileToBase64, processImageToStandardScale, maskFaceInImage } from './core/utils/imageUtils';
+import { fileToBase64, processImageToStandardScale, maskFaceInImage, extractDominantColors, applyColorCorrection } from './core/utils/imageUtils';
 import { asyncPool } from './core/utils/asyncUtils';
 import { getViewPrompt } from './core/prompts/promptEngine';
 import { generateSingleImageNanoBanana } from './core/adapters/nanoBananaAdapter';
@@ -19,6 +19,10 @@ const VISUAL_ANCHOR_CACHE = {};
 // Shared Outfit Color Cache for Batch Consistency
 // Stores the outfit color extracted from the FIRST Pose Ref, used by all subsequent generations
 let BATCH_OUTFIT_COLOR = null;
+
+// Shared Product Color Cache for Color Correction
+// Stores RGB extracted from FIRST uploaded product image, used to correct all generated outputs
+let BATCH_PRODUCT_COLOR = null;
 
 // --- Main Dispatcher ---
 const generateSingleImage = async (referenceImages, prompt, apiKey, apiUrl, img2imgInput = null, config = null) => {
@@ -100,9 +104,20 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
     };
 
     // 0. PRE-FLIGHT
-    // Reset batch outfit color for new batch generation
+    // Reset batch caches for new batch generation
     BATCH_OUTFIT_COLOR = null;
-    console.log('[Batch] Starting new batch - outfit color cache reset');
+    BATCH_PRODUCT_COLOR = null;
+    console.log('[Batch] Starting new batch - color caches reset');
+
+    // Extract reference color from FIRST uploaded product image for color correction
+    const firstProductSlot = Object.entries(viewImagesMap).find(([slotId]) => !slotId.startsWith('m_'));
+    if (firstProductSlot) {
+        updateStatus("Extracting reference color from first product...");
+        const firstProductFile = firstProductSlot[1];
+        const firstProductBase64 = await fileToBase64(firstProductFile);
+        BATCH_PRODUCT_COLOR = await extractDominantColors(firstProductBase64.fullDataUrl);
+        console.log(`[Batch] Product reference color: RGB(${BATCH_PRODUCT_COLOR.r}, ${BATCH_PRODUCT_COLOR.g}, ${BATCH_PRODUCT_COLOR.b})`);
+    }
 
     // In Cutout Mode, we skip analysis.
     updateStatus("Processing Uploaded Images...");
@@ -257,10 +272,20 @@ export const generateImages = async (viewImagesMap, config, onImageGenerated, on
                     { ...config, viewType: task.viewType, isModelTask: task.isModel } // Pass viewType for post-processing logic
                 );
 
-                // 4. Success Handling
+                // 4. Color Correction for Product Images
+                // Apply color correction to match the first uploaded product's color
+                // Toggle: config.enableColorCorrection (default: true)
+                let finalResultUrl = resultUrl;
+                const colorCorrectionEnabled = config.enableColorCorrection !== false; // Default true
+                if (!task.isModel && BATCH_PRODUCT_COLOR && resultUrl && colorCorrectionEnabled) {
+                    updateStatus(`Applying color correction for ${task.label}...`);
+                    finalResultUrl = await applyColorCorrection(resultUrl, BATCH_PRODUCT_COLOR);
+                }
+
+                // 5. Success Handling
                 completedTasks++;
                 const resultData = {
-                    url: resultUrl,
+                    url: finalResultUrl,
                     label: task.label,
                     qc: { score: 10, reason: "Cutout Mode Direct Pass" } // Skip QC for speed/reliability in this mode
                 };

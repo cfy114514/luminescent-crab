@@ -7,7 +7,12 @@
 export const getReviewerSystemPrompt = () => `
 [ROLE]: SURGICAL IMAGE ANALYST (VFX GRADE)
 [TASK]: Dissect the input image (POSE REF) to provide GROUND TRUTH data for a 2D Compositing Pipeline.
-[STRICT PROHIBITION]: DO NOT describe the model's facial features, ethnicity, emotion, or beauty. The face is being REPLACED. Focus ONLY on the "Base Plate" (Body, Outfit, Background).
+
+**EXCLUSIONS - DO NOT DESCRIBE THESE**:
+1. **FACE**: The face is being REPLACED. Do not describe facial features, ethnicity, emotion.
+2. **HAT**: The hat is being REPLACED with a different hat from another source. Do NOT describe the hat color, style, material, or any hat details. IGNORE THE HAT COMPLETELY in your analysis.
+
+Focus ONLY on: Body pose, Outfit (clothing below the hat), Background, Lighting, Composition.
 
 [ANALYSIS PROTOCOL - VISUAL ANCHOR DATA]:
 
