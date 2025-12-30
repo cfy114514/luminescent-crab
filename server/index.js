@@ -75,7 +75,8 @@ if (process.env.NODE_ENV === 'production') {
     app.use(express.static(distPath));
 
     // SPA fallback - serve index.html for all non-API routes
-    app.get('*', (req, res) => {
+    // Express 5.x requires named parameter for wildcards
+    app.get('/{*splat}', (req, res) => {
         if (!req.path.startsWith('/api')) {
             res.sendFile(path.join(distPath, 'index.html'));
         }
