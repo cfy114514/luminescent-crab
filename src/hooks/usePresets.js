@@ -23,10 +23,20 @@ export const usePresets = () => {
         const legacyIds = ['model_lifestyle', 'model_lifestyle_walking', 'model_lifestyle_leaning'];
         const finalViewpoints = syncedViewpoints.filter(v => !legacyIds.includes(v.id));
 
+        // Sync Models (New Feature)
+        const syncedModels = [...(initial.models || [])];
+        if (defaultPresets.models) {
+            defaultPresets.models.forEach(dm => {
+                if (!syncedModels.find(m => m.id === dm.id)) {
+                    syncedModels.push(dm);
+                }
+            });
+        }
+
         return {
             ...initial,
             viewpoints: finalViewpoints,
-            models: initial.models || [],
+            models: syncedModels,
             productCategories: syncedCategories
         };
     });

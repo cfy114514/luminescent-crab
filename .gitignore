@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.aider*
+
+scripts/已处理/
+scripts/待处理/
+
+# Environment files (NEVER commit secrets!)
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Database
+data/
+*.db
+
+# Config with sensitive data
+config.json

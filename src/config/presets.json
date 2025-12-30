@@ -43,7 +43,36 @@
             "referenceImages": []
         }
     ],
-    "models": [],
+    "models": [
+        {
+            "id": "model_vacation_f",
+            "name": "30s Caucasian female (Resort)",
+            "visual_identity": "30s Caucasian female. Sun-kissed natural skin texture. Relaxed posture.",
+            "hair_style": "Low ponytail or loose beach waves.",
+            "makeup": "Natural glow, no heavy contouring."
+        },
+        {
+            "id": "model_outdoor_f",
+            "name": "20s Latina athlete (Outdoor)",
+            "visual_identity": "Latina/Hispanic female, 20s-30s. Athletic build.",
+            "hair_style": "Practical low ponytail, sporty and neat.",
+            "makeup": "Minimal, fresh, athletic, sweat-proof look."
+        },
+        {
+            "id": "model_resort_m",
+            "name": "35-45 Caucasian male (Resort)",
+            "visual_identity": "Caucasian male, 35-45 years old. Head circumference 58cm. Height 178-185cm, Weight 80-90kg. Fit but relaxed build. Mature, confident presence.",
+            "hair_style": "Short hair, neat and low-maintenance.",
+            "grooming": "Light stubble or clean-shaven. Resort-ready grooming."
+        },
+        {
+            "id": "model_asian_f",
+            "name": "Asian female (Pure Studio)",
+            "visual_identity": "Asian female, mid-20s. Porcelain skin, symmetry focus. High-fashion posture.",
+            "hair_style": "Straight black hair, middle part.",
+            "makeup": "Dewy skin finish, minimalist aesthetic."
+        }
+    ],
     "productCategories": [
         {
             "id": "hat",

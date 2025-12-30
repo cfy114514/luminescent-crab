@@ -4,7 +4,7 @@ import { interrogateImages, mergePrompts } from '../../services/api';
 import UploadZone from '../UploadZone';
 
 const StyleEditor = ({ presets, onSave }) => {
-    const [localPresets, setLocalPresets] = useState(presets.styles || []);
+    const [localPresets, setLocalPresets] = useState(presets?.styles || []);
     const [selectedId, setSelectedId] = useState(localPresets[0]?.id || null);
     const [isInterrogating, setIsInterrogating] = useState(false);
     const [interrogationRefImages, setInterrogationRefImages] = useState([]);

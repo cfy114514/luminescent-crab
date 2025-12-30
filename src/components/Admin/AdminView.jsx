@@ -7,13 +7,15 @@ import {
     Settings,
     Layout,
     ArrowLeft,
-    User
+    User,
+    Users
 } from 'lucide-react';
 import StyleEditor from './StyleEditor';
 import ViewpointEditor from './ViewpointEditor';
 import ModelEditor from './ModelEditor';
 import CategoryEditor from './CategoryEditor';
 import SyncSettings from './SyncSettings';
+import UserManagement from './UserManagement';
 
 const AdminView = ({ onBack, presets, setPresets }) => {
     const [activeTab, setActiveTab] = useState('categories');
@@ -22,6 +24,7 @@ const AdminView = ({ onBack, presets, setPresets }) => {
         { id: 'categories', label: '产品分类管理', icon: Layout },
         // { id: 'styles', label: '风格预设管理', icon: Palette },
         { id: 'models', label: '模特库管理', icon: User },
+        { id: 'users', label: '用户管理', icon: Users },
         { id: 'sync', label: '同步与备份', icon: Settings },
         // { id: 'viewpoints', label: '视角/机位配置', icon: Camera },
     ];
@@ -86,6 +89,9 @@ const AdminView = ({ onBack, presets, setPresets }) => {
                         )}
                         {activeTab === 'models' && (
                             <ModelEditor presets={presets} onSave={setPresets} />
+                        )}
+                        {activeTab === 'users' && (
+                            <UserManagement />
                         )}
                         {activeTab === 'viewpoints' && (
                             <ViewpointEditor presets={presets} setPresets={setPresets} />

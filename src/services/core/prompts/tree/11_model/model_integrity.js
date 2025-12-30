@@ -22,4 +22,7 @@ export const MODEL_MASTER_NEGATIVE = `
 (headshot:5.0), (close-up:5.0), (portrait:5.0), 
 (rotating the hat:5.0), (straightened hat:4.0), 
 (shadows on the right side of face:8.0), 
+(nipple:5.0), (nude:5.0), (nsfw:5.0), (naked:5.0), (topless:5.0),
+(cleavage:3.5), (revealing clothing:3.0), (bikini:4.0), (underwear:4.0), (lingerie:4.0),
+(exposed skin:2.5), (low cut:3.0), (see through:4.0), (transparent clothing:4.0),
 `.trim();

@@ -20,12 +20,12 @@ const ViewpointEditor = ({ presets, setPresets }) => {
     const [isInterrogating, setIsInterrogating] = useState(false);
 
     const currentViewpoint = useMemo(() =>
-        presets.viewpoints.find(v => v.id === selectedId),
-        [selectedId, presets.viewpoints]
+        presets?.viewpoints?.find(v => v.id === selectedId),
+        [selectedId, presets?.viewpoints]
     );
 
     const handleUpdate = (field, value) => {
-        const newViewpoints = presets.viewpoints.map(v =>
+        const newViewpoints = (presets?.viewpoints || []).map(v =>
             v.id === selectedId ? { ...v, [field]: value } : v
         );
         setPresets({ ...presets, viewpoints: newViewpoints });
@@ -42,7 +42,7 @@ const ViewpointEditor = ({ presets, setPresets }) => {
 
             if (result.reverse_prompt_fragment || result.pose_prompt) {
                 const fragment = result.pose_prompt || result.reverse_prompt_fragment;
-                const newViewpoints = presets.viewpoints.map(v =>
+                const newViewpoints = (presets?.viewpoints || []).map(v =>
                     v.id === selectedId ? {
                         ...v,
                         interrogatedPrompt: fragment,
@@ -75,7 +75,7 @@ const ViewpointEditor = ({ presets, setPresets }) => {
                 </div>
 
                 <div className="space-y-2">
-                    {presets.viewpoints.map(view => (
+                    {(presets?.viewpoints || []).map(view => (
                         <button
                             key={view.id}
                             onClick={() => setSelectedId(view.id)}

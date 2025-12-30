@@ -77,6 +77,20 @@ export const generateSingleImageGemini = async (referenceImages, prompt, apiKey,
 
 
 
+
+    // --- Dry Run Mode ---
+    if (config?.isDryRun) {
+        console.log("!!! DRY RUN MODE ACTIVE - SKIPPING API CALL !!!");
+        console.log("Would have sent payload:", JSON.stringify(payload, null, 2));
+
+        // Simulate network delay for realism (300ms)
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Return a 1x1 transparent pixel placeholder or a visual 'Dry Run' placeholder
+        // Using a small blue placeholder to indicate success
+        return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwM/sV6X1AAAAABJRU5ErkJggg==";
+    }
+
     const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

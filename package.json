@@ -1,19 +1,29 @@
 {
   "name": "luminescent-crab",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "server": "node server/index.js",
+    "server:dev": "NODE_ENV=development node server/index.js",
+    "start": "npm run build && npm run server"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.5.0",
     "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-session": "^1.18.2",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.26",
+    "helmet": "^8.1.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.559.0",
     "react": "^19.2.0",

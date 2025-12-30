@@ -1,24 +1,54 @@
 import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Camera, User, Play, X, Loader2, Download, Maximize2, AlertCircle, Map, Focus, RotateCcw, Layout } from 'lucide-react';
+import { Camera, User, Play, X, Loader2, Download, Maximize2, AlertCircle, Map, Focus, RotateCcw, Layout, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import SkeletonLoader from './common/SkeletonLoader';
+
+// Contexts
+import { useGeneration } from '../contexts/GenerationContext';
+import { useConfig } from '../contexts/ConfigContext';
+import { useApp } from '../contexts/AppContext';
 
 const WorkflowRow = ({
     slot,
-    file,
-    poseFile,
-    result,
-    isProcessing,
-    onUpload,
-    onPoseUpload,
-    onRemove,
-    onPoseRemove,
-    onGenerate,
-    onZoom,
     index,
-    metadata,
-    onMetadataChange
 }) => {
+    // 1. Consume Contexts
+    const {
+        viewImages,
+        poseImages,
+        results,
+        isProcessing,
+        visualProgress,
+        uploadImage,
+        uploadPoseImage,
+        removeImage,
+        removePoseImage,
+        generateSingle
+    } = useGeneration();
+
+    const {
+        slotMetadata,
+        updateSlotMetadata
+    } = useConfig();
+
+    const { openImageViewer } = useApp();
+
+    // 2. Derive Local State from Context
+    const file = viewImages[slot.id];
+    const poseFile = poseImages[slot.id];
+    const result = results?.[slot.id];
+    const metadata = slotMetadata[slot.id] || {};
+
+    // 3. Handlers
+    const onUpload = (id, file) => uploadImage(id, file);
+    const onPoseUpload = (id, file) => uploadPoseImage(id, file);
+    const onRemove = (id) => removeImage(id);
+    const onPoseRemove = (id) => removePoseImage(id);
+    const onGenerate = (id) => generateSingle(id);
+    const onZoom = (url) => openImageViewer(url);
+    const onMetadataChange = (id, data) => updateSlotMetadata(id, data);
+
 
     const onDrop = useCallback(acceptedFiles => {
         if (acceptedFiles.length > 0) {
@@ -167,14 +197,24 @@ const WorkflowRow = ({
                         </div>
                     </>
                 ) : (
-                    <div className="flex flex-col items-center gap-1 text-slate-500">
-                        {slot.type === 'product'
-                            ? <Camera className="w-5 h-5 mb-1 opacity-50" />
-                            : <Camera className="w-5 h-5 mb-1 opacity-50 text-blue-400" />
-                        }
-                        <span className="text-[10px] font-bold leading-tight">
-                            {slot.type === 'model' ? '帽子原图' : slot.label}
-                        </span>
+                    <div className="flex flex-col items-center gap-2 text-slate-500 group-hover:text-slate-400 transition-colors">
+                        <div className="p-3 rounded-full bg-slate-800/50 border border-slate-700 group-hover:bg-slate-700/50 group-hover:scale-110 transition-all duration-300">
+                            {slot.type === 'product'
+                                ? <Camera className="w-5 h-5 opacity-60" />
+                                : <User className="w-5 h-5 opacity-60 text-purple-400" />
+                            }
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                {slot.type === 'model' ? '上传模特图' : '上传产品图'}
+                            </span>
+                            <span className="text-[8px] font-medium opacity-50 mt-0.5">
+                                {slot.label}
+                            </span>
+                        </div>
+                        <div className="bg-slate-800/80 px-2 py-0.5 rounded text-[8px] uppercase tracking-widest font-bold opacity-0 group-hover:opacity-100 transition-opacity translate-y-1 group-hover:translate-y-0">
+                            点击或拖拽上传
+                        </div>
                     </div>
                 )}
             </div>
@@ -253,10 +293,19 @@ const WorkflowRow = ({
                             <p className="text-xs text-red-400 font-mono">{typeof result.error === 'string' ? result.error : 'Generation Failed'}</p>
                         </div>
                     ) : (
-                        <div className="text-center text-slate-600">
-                            <div className="text-4xl font-black opacity-10 select-none">{slot.id.split('_')[1].toUpperCase()}</div>
-                            <span className="text-xs opacity-50">Waiting for generation...</span>
-                        </div>
+                        isProcessing && file ? (
+                            <div className="w-full h-full p-4">
+                                <SkeletonLoader className="w-full h-full rounded-lg" />
+                                <div className="absolute inset-x-0 bottom-4 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">生成中...</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center text-slate-600">
+                                <div className="text-4xl font-black opacity-10 select-none">{slot.id.split('_')[1].toUpperCase()}</div>
+                                <span className="text-xs opacity-50">等待生成...</span>
+                            </div>
+                        )
                     )}
                 </AnimatePresence>
             </div>

@@ -1,16 +1,80 @@
-# React + Vite
+# ProductAI Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+智能图生图平台 - AI-Powered Product Image Generation
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 🎨 **AI Image Generation**: Generate product and model images using Gemini API
+- 🔐 **User Authentication**: Secure login system with role-based access
+- 👥 **Admin Panel**: User management for administrators
+- 🐳 **Docker Ready**: One-click deployment with Docker Compose
+- 🌏 **Chinese UI**: Fully localized interface
 
-## React Compiler
+## Quick Start (Development)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# Install dependencies
+npm install
 
-## Expanding the ESLint configuration
+# Start dev server
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Production Deployment (Ubuntu 24.04)
+
+```bash
+# 1. Clone repository
+git clone <repo> && cd luminescent-crab
+
+# 2. Configure environment
+cp .env.example .env.production
+nano .env.production  # Set API keys, session secret, etc.
+
+# 3. Deploy
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+```
+
+The app will be available at `http://your-server-ip:80`
+
+Default login: `admin` / (password from `.env.production`)
+
+## Environment Variables
+
+See [.env.example](.env.example) for all available options:
+
+| Variable | Description |
+|----------|-------------|
+| `SESSION_SECRET` | **Required.** Random string for session encryption |
+| `GEMINI_API_KEY_1` | Primary Gemini API key |
+| `GEMINI_API_KEY_2` | Secondary API key (optional) |
+| `DEFAULT_ADMIN_PASSWORD` | Initial admin password |
+
+## Project Structure
+
+```
+├── server/                 # Express backend
+│   ├── index.js           # Server entry point
+│   ├── db.js              # SQLite database
+│   ├── models/            # Data models
+│   ├── routes/            # API routes
+│   └── middleware/        # Auth middleware
+├── src/                   # React frontend
+│   ├── components/        # UI components
+│   ├── contexts/          # State management
+│   └── services/          # API adapters
+├── Dockerfile             # Container build
+├── docker-compose.yml     # Orchestration
+└── scripts/deploy.sh      # Deployment script
+```
+
+## Tech Stack
+
+- **Frontend**: React 19, Vite, TailwindCSS, Framer Motion
+- **Backend**: Express.js, SQLite (better-sqlite3)
+- **Auth**: express-session, bcryptjs
+- **Deployment**: Docker, Docker Compose
+
+## License
+
+Private - All rights reserved.

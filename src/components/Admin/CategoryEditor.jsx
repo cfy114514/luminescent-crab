@@ -4,7 +4,7 @@ import { interrogateImages } from '../../services/api';
 import UploadZone from '../UploadZone';
 
 const CategoryEditor = ({ presets, onSave }) => {
-    const [localPresets, setLocalPresets] = useState(presets.productCategories || []);
+    const [localPresets, setLocalPresets] = useState(presets?.productCategories || []);
     const [selectedId, setSelectedId] = useState(localPresets[0]?.id || null);
     const [isInterrogating, setIsInterrogating] = useState(false);
     const [interrogationRefImages, setInterrogationRefImages] = useState([]);

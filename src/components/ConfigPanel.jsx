@@ -1,24 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Eraser, Settings, ChevronDown, ChevronUp, User, Camera, Sparkles, Loader2, Fingerprint, Key, Hash, Layout, Zap, Save, RefreshCw } from 'lucide-react';
+import { Layers, ChevronDown, ChevronUp, Sparkles, Save, RefreshCw, Settings, Zap, Loader2 } from 'lucide-react';
 import SuperResolutionPanel from './SuperResolutionPanel';
-import ModelDNAPanel from './ModelDNAPanel';
 import PersonaManagementPanel from './PersonaManagementPanel';
 import { DEFAULT_PERSONA_GROUPS } from '../services/core/prompts/engines/setB/defaultPersonas';
 
-const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: propSavePresets, styleReferenceImage, setStyleReferenceImage, outfitSuggestion, onAnalyzeStyle, isAnalyzing, status, onGenerate }) => {
-    const [isModelExpanded, setIsModelExpanded] = useState(true);
-    const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
+// Contexts
+import { useConfig } from '../contexts/ConfigContext';
+import { useGeneration } from '../contexts/GenerationContext';
+import { useApp } from '../contexts/AppContext';
+import { useToast } from '../contexts/ToastContext';
 
-    // Server-side Config State
+// New Sub-components
+import ModeSelector from './config/ModeSelector';
+import GlobalTechnicalSettings from './config/GlobalTechnicalSettings';
+import IdentitySettings from './config/IdentitySettings';
+import VisualReferenceSettings from './config/VisualReferenceSettings';
+import CompositorSettings from './config/CompositorSettings';
+
+const ConfigPanel = () => {
+    // 1. Consume Contexts
+    const {
+        config,
+        setConfig,
+        updateConfig,
+        presets,
+        savePresets, // Note: savePresets from userPresets hook is for local storage. 
+        // ConfigPanel also has logic for server-side config. We'll keep that local to ConfigPanel for now or move to context later.
+        styleReferenceImage,
+        setStyleReferenceImage,
+        outfitSuggestion,
+        analyzeStyle,
+        isAnalyzing,
+        isDryRun,
+        setIsDryRun
+    } = useConfig();
+
+    const {
+        isProcessing,
+        generateAll,
+        viewImages
+    } = useGeneration();
+
+    const { activeTab } = useApp();
+    const { addToast } = useToast();
+
+    // Local UI State
+    const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
     const [serverPresets, setServerPresets] = useState({});
     const [availableApiKeys, setAvailableApiKeys] = useState({});
     const [newPresetName, setNewPresetName] = useState('');
-    const [showSavePreset, setShowSavePreset] = useState(false);
 
-    // Drag UI State
-    const [styleRefIsDragging, setStyleRefIsDragging] = useState(false);
-
-    // Fetch Config on Mount
+    // Fetch Config on Mount (Legacy Server Config)
+    // TODO: Move this into ConfigContext eventually
     useEffect(() => {
         const fetchConfig = async () => {
             try {
@@ -27,19 +60,16 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
                     const data = await res.json();
                     setAvailableApiKeys(data.apiKeys || {});
                     if (data.userConfig) {
-                        const { presets, apiKeySelection, customApiUrl, personaGroups } = data.userConfig;
-                        if (presets) setServerPresets(presets);
+                        const { presets: sPresets, apiKeySelection, customApiUrl, personaGroups } = data.userConfig;
+                        if (sPresets) setServerPresets(sPresets);
 
-                        // Apply saved key/url preferences
                         setConfig(prev => ({
                             ...prev,
                             apiKeySelection: apiKeySelection || 'key1',
                             customApiUrl: customApiUrl || prev.customApiUrl,
-                            // Initialize Persona Groups (Use saved or Default)
                             personaGroups: personaGroups || DEFAULT_PERSONA_GROUPS
                         }));
                     } else {
-                        // First time load, no userConfig
                         setConfig(prev => ({ ...prev, personaGroups: DEFAULT_PERSONA_GROUPS }));
                     }
                 }
@@ -49,16 +79,15 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
             }
         };
         fetchConfig();
-    }, []);
+    }, [setConfig]);
 
-    // Helper to save config to server
     const saveConfigToServer = async (newPresets, newApiKeySelection, newCustomApiUrl) => {
         try {
             const configToSave = {
                 presets: newPresets !== undefined ? newPresets : serverPresets,
                 apiKeySelection: newApiKeySelection !== undefined ? newApiKeySelection : config.apiKeySelection,
                 customApiUrl: newCustomApiUrl !== undefined ? newCustomApiUrl : config.customApiUrl,
-                personaGroups: config.personaGroups // Persist Personas
+                personaGroups: config.personaGroups
             };
 
             await fetch('/api/config', {
@@ -72,8 +101,7 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
     };
 
     const handleChange = (key, value) => {
-        setConfig(prev => ({ ...prev, [key]: value }));
-        // Auto-save API Key and Custom URL changes
+        updateConfig(key, value);
         if (key === 'apiKeySelection' || key === 'customApiUrl') {
             saveConfigToServer(undefined,
                 key === 'apiKeySelection' ? value : undefined,
@@ -82,30 +110,20 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
         }
     };
 
-    // Handler for saving a new model preset (server-side)
     const handleSavePreset = () => {
-        if (!newPresetName) return alert("Please enter a preset name");
+        if (!newPresetName) return addToast("Please enter a preset name", "warning");
 
-        // Construct new preset object matching the current config state relevant to model/style
         const newPreset = {
             id: `custom_${Date.now()}`,
             name: newPresetName,
-            prompt: config.prompt,
-            negative_prompt: config.negative_prompt,
-            imageSize: config.imageSize,
-            aspect_ratio: config.aspect_ratio,
-            model: config.model,
-            clothing: config.clothing,
-            gender: config.gender,
-            ethnicity: config.ethnicity
+            ...config
         };
 
         const newPresets = { ...serverPresets, [newPresetName]: newPreset };
         setServerPresets(newPresets);
         saveConfigToServer(newPresets);
         setNewPresetName('');
-        setShowSavePreset(false);
-        alert(`Saved preset: ${newPresetName}`);
+        addToast(`Saved preset: ${newPresetName}`, "success");
     };
 
     const loadPreset = (name) => {
@@ -116,423 +134,248 @@ const ConfigPanel = ({ config, setConfig, presets: propPresets, savePresets: pro
     };
 
     return (
-        <div className="w-full glass-panel rounded-2xl p-6 space-y-6 mt-6">
+        <div className="w-full glass-panel rounded-[2rem] p-8 space-y-8 mt-6 border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)]">
 
             {/* 1. Header & Mode Switch */}
-            <div className="space-y-4 pb-4 border-b border-slate-700/50">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-semibold text-white flex items-center">
-                        <span className="w-1 h-6 bg-purple-500 rounded-full mr-3" />
-                        Configuration
-                    </h3>
-
-                    {/* Mode Toggle */}
-                    <div className="flex bg-slate-900/80 rounded-lg p-1 border border-slate-700">
-                        <button
-                            onClick={() => handleChange('promptSet', 'A')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'A' || (!config.promptSet) ? 'bg-slate-700 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            <span className="flex items-center gap-1">Standard (A)</span>
-                        </button>
-                        <button
-                            onClick={() => handleChange('promptSet', 'B')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'B' ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> Lifestyle (B)</span>
-                        </button>
-                        <button
-                            onClick={() => handleChange('promptSet', 'C')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${config.promptSet === 'C' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            <span className="flex items-center gap-1">🎭 Compositor (C)</span>
-                        </button>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-6 border-b border-white/5">
+                <div className="flex items-center gap-4">
+                    <div className="w-2 h-8 bg-gradient-to-b from-purple-500 to-indigo-600 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
+                    <div>
+                        <h3 className="text-2xl font-bold text-white tracking-tight">配置面板</h3>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-0.5">Studio Core v3.0 (核心版本)</p>
                     </div>
                 </div>
-
-                {/* Global Settings Grid: API, Res, Ratio, Engine */}
-                <div className="grid grid-cols-4 gap-3">
-                    {/* 1. API Key */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1"><Key className="w-3 h-3" /> API 密钥</label>
-                        <select
-                            value={config.apiKeySelection || 'key1'}
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                handleChange('apiKeySelection', val);
-                                if (val === 'custom') {
-                                    // Hardcoded Local API as requested
-                                    handleChange('customApiUrl', 'http://127.0.0.1:8045/v1');
-                                }
-                            }}
-                            className="w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-purple-500"
-                        >
-                            <option value="key1">Key 1 {availableApiKeys.key1 ? '✓' : ''}</option>
-                            <option value="key2">Key 2 {availableApiKeys.key2 ? '✓' : ''}</option>
-                            <option value="custom">Custom (Local 8045)</option>
-                        </select>
-                    </div>
-
-                    {/* 2. Base Model Engine (Moved to Global) */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1"><Zap className="w-3 h-3" /> 生图引擎 (Engine)</label>
-                        <select
-                            value={config.model || 'gemini-2.5-flash-image'}
-                            onChange={(e) => handleChange('model', e.target.value)}
-                            className="w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-xs text-purple-300 outline-none focus:border-purple-500"
-                        >
-                            <optgroup label="Google Vertex AI">
-                                <option value="gemini-2.5-flash-image">Gemini 2.5 Flash</option>
-                                <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Exp)</option>
-                                {/* User specified Manual Override */}
-                                <option value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</option>
-                                <option value="imagen-3.0-generate-002">Imagen 3 (Fast)</option>
-                            </optgroup>
-                            <optgroup label="High Fidelity (Banana/Replicate)">
-                                <option value="banana-pro">Flux 1.1 Pro (Banana)</option>
-                                <option value="flux-dev">Flux Dev (Replicate)</option>
-                            </optgroup>
-                        </select>
-                    </div>
-
-                    {/* 3. Resolution */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1"><Settings className="w-3 h-3" /> 分辨率</label>
-                        <select
-                            value={config.imageSize || '2K'}
-                            onChange={(e) => handleChange('imageSize', e.target.value)}
-                            className="w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-cyan-500"
-                        >
-                            <option value="1K">1K (Square)</option>
-                            <option value="2K">2K (High-Res)</option>
-                            <option value="4K">4K (Ultra)</option>
-                        </select>
-                    </div>
-
-                    {/* 4. Aspect Ratio */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] uppercase text-slate-500 font-bold flex items-center gap-1"><Layout className="w-3 h-3" /> 比例</label>
-                        <select
-                            value={config.aspect_ratio || '1:1'}
-                            onChange={(e) => handleChange('aspect_ratio', e.target.value)}
-                            className="w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-pink-500"
-                        >
-                            <option value="1:1">1:1 (Square)</option>
-                            <option value="3:4">3:4 (Portrait)</option>
-                            <option value="4:3">4:3 (Landscape)</option>
-                            <option value="9:16">9:16 (Story)</option>
-                            <option value="16:9">16:9 (Cinema)</option>
-                        </select>
-                    </div>
-                </div>
-
+                <ModeSelector activeMode={config.promptSet} onChange={handleChange} />
             </div>
 
-            {/* 2. Context & Engine Settings (Conditional) */}
-            <div className="space-y-4 pb-4 border-b border-slate-700/50">
+            {/* 2. Global Technical Settings */}
+            <GlobalTechnicalSettings
+                config={config}
+                onChange={handleChange}
+                availableApiKeys={availableApiKeys}
+                isDryRun={isDryRun}
+                setIsDryRun={setIsDryRun}
+            />
+
+            {/* 3. Engine Specific Banner & Settings */}
+            <div className="space-y-6">
                 {(config.promptSet === 'B' || config.promptSet === 'C') ? (
-                    // === SET B / SET C UI (Shared Persona Engine) ===
-                    <div className="animate-in fade-in duration-300 space-y-4">
-                        <div className={`flex items-center gap-2 p-3 rounded-lg border ${config.promptSet === 'C' ? 'bg-amber-900/10 border-amber-500/20' : 'bg-cyan-900/10 border-cyan-500/20'}`}>
-                            <Zap className={`w-4 h-4 ${config.promptSet === 'C' ? 'text-amber-400' : 'text-cyan-400'}`} />
-                            <div className="flex-1">
-                                <h4 className={`text-xs font-bold ${config.promptSet === 'C' ? 'text-amber-300' : 'text-cyan-300'}`}>
-                                    {config.promptSet === 'C' ? 'Set C 已激活: Compositor 模式 (换脸换帽)' : 'Set B 已激活: 自动化角色引擎'}
-                                </h4>
-                                <p className={`text-[10px] ${config.promptSet === 'C' ? 'text-amber-200/60' : 'text-cyan-200/60'}`}>
-                                    {config.promptSet === 'C'
-                                        ? '使用参考图底板，仅替换头部 (帽子 + 脸部)。'
-                                        : '系统将根据下方关键词自动选择度假、户外或高尔夫角色。'}
-                                </p>
+                    <div className="animate-in fade-in slide-in-from-top-4 duration-500 space-y-6">
+                        <div className={`relative overflow-hidden p-5 rounded-2xl border backdrop-blur-xl group
+                            ${config.promptSet === 'C' ? 'bg-amber-500/5 border-amber-500/20' : 'bg-cyan-500/5 border-cyan-500/20'}`}>
+                            {/* Decorative light effect */}
+                            <div className={`absolute -right-10 -top-10 w-40 h-40 rounded-full blur-[80px] opacity-20
+                                ${config.promptSet === 'C' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+
+                            <div className="relative flex items-center gap-4">
+                                <div className={`p-3 rounded-xl shadow-lg
+                                    ${config.promptSet === 'C' ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                                    {config.promptSet === 'C' ? <Layers className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
+                                </div>
+                                <div>
+                                    <h4 className={`text-[13px] font-black uppercase tracking-widest
+                                        ${config.promptSet === 'C' ? 'text-amber-300' : 'text-cyan-300'}`}>
+                                        {config.promptSet === 'C' ? 'Compositor Engine (Set C)' : 'Lifestyle Persona (Set B)'}
+                                    </h4>
+                                    <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+                                        {config.promptSet === 'C'
+                                            ? 'Professional VFX pipeline for surgical asset integration.'
+                                            : 'Dynamic environmental generation based on persona presets.'}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Clone Mode Toggle - SET C ONLY */}
-                        {config.promptSet === 'C' && (
-                            <div className="flex items-center justify-between py-2 px-3 bg-amber-900/20 rounded-lg border border-amber-500/30">
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-bold text-amber-300">🔗 Clone Mode (克隆模式)</span>
-                                    <span className="text-[10px] text-amber-200/60">
-                                        完全克隆参考图的姿势 + 着装，仅替换脸部和帽子
-                                    </span>
-                                </div>
-                                <button
-                                    onClick={() => handleChange('cloneOutfitFromRef', !config.cloneOutfitFromRef)}
-                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.cloneOutfitFromRef ? 'bg-amber-500' : 'bg-slate-700'}`}
-                                >
-                                    <span
-                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.cloneOutfitFromRef ? 'translate-x-5' : 'translate-x-1'}`}
-                                    />
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Persona Manager (Shared between Set B and Set C) */}
-                        <PersonaManagementPanel config={config} setConfig={setConfig} />
+                        {config.promptSet === 'C' && <CompositorSettings config={config} onChange={handleChange} />}
+                        {/* Ensure PersonaManagementPanel also consumes context or pass props. For now pass props to minimize changes if it uses them heavily */}
+                        <PersonaManagementPanel config={config} setConfig={setConfig} presets={presets} />
                     </div>
                 ) : (
-                    // === SET A UI (Legacy / Standard) ===
-                    <div className="animate-in fade-in duration-300 space-y-4">
-                        {/* Category & Admin Model Select */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <label className="text-[10px] uppercase text-slate-500 font-bold">产品品类 (Category)</label>
-                                <select
-                                    value={config.categoryId || ''}
-                                    onChange={(e) => handleChange('categoryId', e.target.value)}
-                                    className="w-full bg-slate-900/50 border border-slate-700 rounded px-2 py-1.5 text-xs text-emerald-300 outline-none"
-                                >
-                                    {propPresets?.productCategories?.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* ADMIN MODEL LIBRARY SELECTOR */}
-                            <div className="space-y-1">
-                                <label className="text-[10px] uppercase text-blue-400 font-bold flex items-center justify-between">
-                                    <span className="flex items-center gap-1"><User className="w-3 h-3" /> 模特预设库 (Admin Library)</span>
-                                </label>
-                                <select
-                                    value={config.modelId || ''}
-                                    onChange={(e) => {
-                                        const selectedId = e.target.value;
-                                        handleChange('modelId', selectedId);
-
-                                        // Auto-sync DNA from Admin Preset
-                                        if (selectedId) {
-                                            const preset = propPresets?.models?.find(m => m.id === selectedId);
-                                            if (preset) {
-                                                handleChange('modelDNA', preset.visual_identity || '');
-                                            }
-                                        }
-                                    }}
-                                    className={`w-full border rounded px-2 py-1.5 text-xs outline-none transition-all ${config.modelId
-                                        ? 'bg-blue-900/20 border-blue-500/50 text-blue-200'
-                                        : 'bg-slate-900/50 border-slate-700 text-slate-400'
-                                        }`}
-                                >
-                                    <option value="">-- 自定义 DNA (Custom) --</option>
-                                    {propPresets?.models?.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Model DNA Panel (Collapsible) */}
-                        <div className="border border-slate-700/50 rounded-xl overflow-hidden">
-                            <div
-                                className="flex justify-between items-center bg-slate-800/30 p-3 cursor-pointer hover:bg-slate-800/50"
-                                onClick={() => setIsModelExpanded(!isModelExpanded)}
-                            >
-                                <label className="text-xs font-bold text-purple-400 flex items-center gap-2 cursor-pointer">
-                                    <User className="w-3 h-3" /> 模特 DNA 与身份 (Identity/Custom)
-                                </label>
-                                {isModelExpanded ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
-                            </div>
-                            {isModelExpanded && (
-                                <div className="p-3 border-t border-slate-700/50 bg-slate-900/20">
-                                    <ModelDNAPanel config={config} setConfig={setConfig} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <IdentitySettings config={config} onChange={handleChange} presets={presets} />
                 )}
             </div>
 
-            {/* 3. Inputs (Shared) */}
-            <div className="space-y-4 pb-4 border-b border-slate-700/50">
-                {/* Clothing / Style Keywords */}
-                <div className="space-y-1">
-                    <label className="flex justify-between items-center">
-                        <span className={`text-xs font-bold uppercase flex items-center gap-2 ${config.promptSet === 'B' ? 'text-cyan-400' : 'text-slate-400'}`}>
-                            <Hash className="w-3 h-3" />
-                            {config.promptSet === 'B' ? "Clothing & Persona Keywords (Triggers)" : "Clothing Description / Style"}
-                        </span>
-                    </label>
-                    <input
-                        type="text"
-                        placeholder={config.promptSet === 'B' ? "e.g., 'Hiking gear', 'Vacation linen', 'Golf polo'..." : "e.g. White linen shirt, studio lighting..."}
-                        value={config.clothing || ''}
-                        onChange={(e) => handleChange('clothing', e.target.value)}
-                        className={`w-full bg-slate-900/50 border rounded-lg px-3 py-2.5 text-sm text-white focus:ring-1 outline-none transition-colors
-                            ${config.promptSet === 'B' ? 'border-cyan-500/30 focus:border-cyan-500 focus:ring-cyan-500/20' : 'border-slate-700 focus:border-indigo-500'}`}
-                    />
-                    {config.promptSet === 'B' && (
-                        <p className="text-[10px] text-cyan-200/50 italic px-1">
-                            * Enter keywords like "hiking", "golf", "resort" to switch personas.
-                        </p>
-                    )}
-                </div>
+            {/* 4. Visual References */}
+            <div className="space-y-6 pt-2">
+                <VisualReferenceSettings
+                    config={config}
+                    onChange={handleChange}
+                    styleReferenceImage={styleReferenceImage}
+                    setStyleReferenceImage={setStyleReferenceImage}
+                />
 
-                {/* Style Reference Upload */}
-                <div className="space-y-2">
-                    <label className="text-[10px] uppercase text-amber-500 font-bold flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> Style Reference Image
-                    </label>
-
-                    {styleReferenceImage ? (
-                        <div className="relative group">
-                            <img
-                                src={URL.createObjectURL(styleReferenceImage)}
-                                alt="Style Reference"
-                                className="w-full h-32 object-cover rounded-lg border border-amber-500/30 shadow-md"
-                            />
-                            <button
-                                onClick={() => setStyleReferenceImage(null)}
-                                className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur rounded-full text-white hover:bg-red-500 transition-colors"
-                            >
-                                <span className="text-xs">✕</span>
-                            </button>
-                        </div>
-                    ) : (
-                        <div
-                            className={`border border-dashed rounded-lg p-6 text-center transition-all cursor-pointer ${styleRefIsDragging ? 'border-amber-500 bg-amber-500/10' : 'border-slate-700 hover:border-amber-500/40 hover:bg-slate-800/50'
-                                }`}
-                            onDragOver={(e) => { e.preventDefault(); setStyleRefIsDragging(true); }}
-                            onDragLeave={() => setStyleRefIsDragging(false)}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                setStyleRefIsDragging(false);
-                                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                                    setStyleReferenceImage(e.dataTransfer.files[0]);
-                                }
-                            }}
-                            onClick={() => document.getElementById('style-ref-input').click()}
-                        >
-                            <input
-                                id="style-ref-input"
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) {
-                                        setStyleReferenceImage(e.target.files[0]);
-                                    }
-                                }}
-                            />
-                            <Camera className={`w-8 h-8 mx-auto mb-2 ${styleRefIsDragging ? 'text-amber-400' : 'text-slate-600'}`} />
-                            <p className="text-xs text-slate-400">
-                                Drag & Drop Style Reference
-                            </p>
-                        </div>
-                    )}
-
-                    {/* Analyze Button */}
+                {/* AI Analysis Container */}
+                <div className="space-y-4">
                     <button
-                        onClick={onAnalyzeStyle}
+                        onClick={() => analyzeStyle(viewImages, styleReferenceImage)}
                         disabled={isAnalyzing}
-                        className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded border border-slate-700 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3.5 glass-button rounded-xl text-xs font-bold text-slate-300 flex items-center justify-center gap-2 group hover:text-white"
                     >
-                        {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                        Analyze Style
+                        {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin text-purple-400" /> : <Sparkles className="w-4 h-4 text-purple-400 group-hover:animate-pulse" />}
+                        <span>分析风格 & 推荐穿搭 (AI Analysis)</span>
                     </button>
 
-                    {/* Outfit Suggestion Display */}
                     {outfitSuggestion && (
-                        <div className="p-3 bg-amber-900/20 border border-amber-500/20 rounded-lg text-xs">
-                            <div className="font-bold text-amber-500 mb-1">AI Suggestion:</div>
-                            <div className="text-amber-200/80 mb-2 line-clamp-2">{outfitSuggestion.outfit_description}</div>
+                        <div className="p-5 bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20 rounded-[1.5rem] text-xs backdrop-blur-md animate-in zoom-in-95 duration-300 shadow-xl">
+                            <div className="font-black text-amber-500 uppercase tracking-widest flex items-center gap-2 mb-3">
+                                <Zap className="w-3.5 h-3.5 fill-current" /> AI 洞察 (AI INSIGHT)
+                            </div>
+                            <div className="text-amber-100/70 mb-4 leading-relaxed font-medium italic">"{outfitSuggestion.outfit_description}"</div>
                             <button
-                                onClick={() => {
-                                    const updates = { clothing: outfitSuggestion.outfit_description };
-                                    Object.entries(updates).forEach(([key, val]) => handleChange(key, val));
-                                }}
-                                className="w-full py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded transition-colors"
+                                onClick={() => handleChange('clothing', outfitSuggestion.outfit_description)}
+                                className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-all shadow-[0_8px_16px_-4px_rgba(217,119,6,0.5)] active:scale-95 text-[11px] uppercase tracking-wider"
                             >
-                                Apply Suggestion
+                                应用推荐配置 (APPLY)
                             </button>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* 4. Post-Processing & Creativity */}
-            <div className="space-y-4">
-                {/* Post-Processing Toggle */}
-                <div className="flex items-center justify-between py-2 px-3 bg-slate-900/30 rounded-lg border border-slate-700/30">
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-300">自动缩放 (Auto Scale)</span>
-                        <span className="text-[10px] text-slate-500">产品图后处理，自动居中缩放至 78%</span>
-                    </div>
-                    <button
-                        onClick={() => handleChange('enablePostProcessing', config.enablePostProcessing === false ? true : false)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.enablePostProcessing !== false ? 'bg-emerald-500' : 'bg-slate-700'}`}
-                    >
-                        <span
-                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.enablePostProcessing !== false ? 'translate-x-5' : 'translate-x-1'}`}
-                        />
-                    </button>
-                </div>
-
-                {/* Color Correction Toggle */}
-                <div className="flex items-center justify-between py-2 px-3 bg-slate-900/30 rounded-lg border border-slate-700/30">
-                    <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-300">颜色校正 (Color Correction)</span>
-                        <span className="text-[10px] text-slate-500">基于首张参考图校正生成图颜色</span>
-                    </div>
-                    <button
-                        onClick={() => handleChange('enableColorCorrection', config.enableColorCorrection === false ? true : false)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${config.enableColorCorrection !== false ? 'bg-cyan-500' : 'bg-slate-700'}`}
-                    >
-                        <span
-                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${config.enableColorCorrection !== false ? 'translate-x-5' : 'translate-x-1'}`}
-                        />
-                    </button>
-                </div>
-
-                {/* Creativity Slider */}
-                <div className="flex items-center gap-4">
-                    <label className="text-[10px] uppercase text-pink-500 font-bold w-12 text-right">Creativity</label>
-                    <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="5"
-                        value={config.creativity !== undefined ? config.creativity : 20}
-                        onChange={(e) => handleChange('creativity', parseInt(e.target.value))}
-                        className="flex-1 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500"
-                    />
-                    <span className="text-[10px] font-mono text-pink-400">{config.creativity}%</span>
-                </div>
-
-                {/* Super Res / Post Processing */}
-                <div className="border border-slate-700/30 rounded-lg overflow-hidden">
-                    <button
-                        onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
-                        className="w-full flex items-center justify-between p-3 bg-slate-900/30 text-xs font-bold text-slate-400 hover:text-slate-200"
-                    >
-                        <span className="flex items-center gap-2"><Settings className="w-3 h-3" /> Post-Processing & Upscale</span>
-                        {isAdvancedExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    </button>
-                    {isAdvancedExpanded && (
-                        <div className="p-3 bg-slate-950/30">
-                            <SuperResolutionPanel config={config} />
+            {/* 5. Advanced Refinement & Library (Refined Accordion) */}
+            <div className="border border-white/5 rounded-[1.5rem] overflow-hidden bg-slate-900/40 shadow-inner">
+                <button
+                    onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)}
+                    className="w-full flex justify-between items-center p-5 hover:bg-white/5 transition-colors group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg transition-colors ${isAdvancedExpanded ? 'bg-emerald-500/20' : 'bg-slate-800'}`}>
+                            <Settings className={`w-4 h-4 ${isAdvancedExpanded ? 'text-emerald-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
                         </div>
-                    )}
-                </div>
-            </div>
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] group-hover:text-slate-200">高级设置 & 预设 (Refinement)</span>
+                    </div>
+                    {isAdvancedExpanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                </button>
 
-            {/* 5. Footer Actions */}
-            <div className="pt-2">
-                {onGenerate && (
-                    <button
-                        onClick={onGenerate}
-                        disabled={status === 'generating'}
-                        className={`w-full py-3 rounded-lg font-bold text-sm text-white shadow-lg transition-all flex items-center justify-center gap-2 ${status === 'generating'
-                            ? 'bg-slate-700 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 border border-white/10'
-                            }`}
-                    >
-                        {status === 'generating' ? (
-                            <><RefreshCw className="w-4 h-4 animate-spin" /> Generating...</>
-                        ) : (
-                            <><Zap className="w-4 h-4 fill-current" /> Generate Image</>
-                        )}
-                    </button>
+                {isAdvancedExpanded && (
+                    <div className="p-6 border-t border-white/5 space-y-8 animate-in slide-in-from-top-2 duration-300">
+                        {/* Rendering Controls */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between px-1">
+                                    <label className="text-[10px] uppercase text-pink-500 font-black tracking-widest">创意度 (Creativity)</label>
+                                    <span className="text-[10px] font-mono text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-full">{config.creativity || 20}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    step="5"
+                                    value={config.creativity !== undefined ? config.creativity : 20}
+                                    onChange={(e) => handleChange('creativity', parseInt(e.target.value))}
+                                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-pink-500 shadow-inner"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-emerald-500/30 transition-all">
+                                <div>
+                                    <span className="text-[11px] font-black text-slate-300 uppercase tracking-wider block">自动缩放 (Auto Scale)</span>
+                                    <span className="text-[9px] text-slate-500 font-medium tracking-tight">自动居中并缩放至 78% (生产建议)</span>
+                                </div>
+                                <button
+                                    onClick={() => handleChange('enablePostProcessing', config.enablePostProcessing === false ? true : false)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 ${config.enablePostProcessing !== false ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${config.enablePostProcessing !== false ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Super Resolution Tool */}
+                        <div className="bg-slate-900/60 rounded-2xl border border-white/5 overflow-hidden">
+                            <SuperResolutionPanel config={config} setConfig={setConfig} />
+                        </div>
+
+                        {/* Library Management */}
+                        <div className="space-y-4 pt-2">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
+                                <div className="w-5 h-[1px] bg-slate-700" />
+                                预设库管理 (Library)
+                                <div className="flex-1 h-[1px] bg-slate-700" />
+                            </label>
+
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="预设名称 (Preset Name)..."
+                                    value={newPresetName}
+                                    onChange={(e) => setNewPresetName(e.target.value)}
+                                    className="flex-1 bg-slate-950/80 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-purple-500/50 outline-none shadow-inner tracking-wider"
+                                />
+                                <button
+                                    onClick={handleSavePreset}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20 active:scale-95"
+                                >
+                                    <Save className="w-3.5 h-3.5" /> 保存
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mt-2 max-h-40 overflow-y-auto custom-scrollbar pr-2 py-1">
+                                {Object.keys(serverPresets).map(name => (
+                                    <button
+                                        key={name}
+                                        onClick={() => loadPreset(name)}
+                                        className="bg-slate-800/40 border border-white/5 hover:border-purple-500/40 hover:bg-purple-500/5 p-3 rounded-xl text-[10px] text-slate-400 font-bold tracking-wider truncate text-left flex items-center gap-3 transition-all group shadow-sm"
+                                    >
+                                        <RefreshCw className="w-3 h-3 text-slate-600 group-hover:text-purple-400 group-hover:rotate-180 transition-all duration-500" />
+                                        {name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
 
+            {/* 6. Primary Action Button (The "Wow" Factor) */}
+            <div className="pt-4 group">
+                <button
+                    onClick={() => generateAll(activeTab)}
+                    disabled={isProcessing}
+                    className={`relative w-full py-5 rounded-[1.5rem] font-black text-lg tracking-[0.2em] transition-all overflow-hidden
+                        ${isProcessing
+                            ? 'bg-slate-800 text-slate-600 cursor-not-allowed border border-white/5'
+                            : 'bg-black text-white hover:scale-[1.01] active:scale-[0.98] shadow-[0_20px_40px_-10px_rgba(79,70,229,0.3)] shadow-indigo-900/40'
+                        }`}
+                >
+                    {/* Background animated gradient */}
+                    {!isProcessing && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 opacity-90 group-hover:opacity-100 transition-opacity" />
+                    )}
+
+                    {/* Particle/Glow Effect */}
+                    {!isProcessing && (
+                        <div className="absolute top-0 -left-1/2 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-[45deg] group-hover:animate-[shimmer_2s_infinite]" />
+                    )}
+
+                    <div className="relative flex items-center justify-center gap-4">
+                        {isProcessing ? (
+                            <>
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                                <span className="uppercase">生产管线运行中 (Processing)...</span>
+                            </>
+                        ) : (
+                            <>
+                                <Zap className="w-6 h-6 fill-current text-white animate-pulse" />
+                                <span className="uppercase">一键生成 (生产级)</span>
+                            </>
+                        )}
+                    </div>
+                </button>
+
+                {/* Secondary Meta Links */}
+                <div className="mt-5 flex items-center justify-center gap-8 text-[9px] text-slate-500 font-black uppercase tracking-[0.25em]">
+                    <span className="flex items-center gap-2 hover:text-slate-300 transition-colors cursor-default select-none">
+                        <div className="w-1.5 h-1.5 rounded-full bg-purple-500/50 shadow-[0_0_8px_rgba(168,85,247,0.5)]" /> 2K 原图直出
+                    </span>
+                    <span className="flex items-center gap-2 hover:text-slate-300 transition-colors cursor-default select-none">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500/50 shadow-[0_0_8px_rgba(59,130,246,0.5)]" /> 自动质检 (Auto-QC)
+                    </span>
+                    <span className="flex items-center gap-2 hover:text-slate-300 transition-colors cursor-default select-none">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50 shadow-[0_0_8px_rgba(16,185,129,0.5)]" /> 物理一致性锁 (Physics)
+                    </span>
+                </div>
+            </div>
         </div>
     );
 };

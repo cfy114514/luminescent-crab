@@ -4,7 +4,7 @@ import { interrogateImages } from '../../services/api';
 import UploadZone from '../UploadZone';
 
 const ModelEditor = ({ presets, onSave }) => {
-    const [localModels, setLocalModels] = useState(presets.models || []);
+    const [localModels, setLocalModels] = useState(presets?.models || []);
     const [selectedId, setSelectedId] = useState(localModels[0]?.id || null);
     const [isInterrogating, setIsInterrogating] = useState(false);
     const [interrogatingId, setInterrogatingId] = useState(null); // 'identity' or viewId
