@@ -60,19 +60,19 @@ const AppContent = () => {
       </div>
 
       {/* Header */}
-      <header className="mb-8 flex items-center space-x-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-          <Sparkles className="text-white w-6 h-6" />
+      <header className="mb-6 sm:mb-8 flex items-center space-x-2 sm:space-x-3">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0">
+          <Sparkles className="text-white w-4 h-4 sm:w-6 sm:h-6" />
         </div>
-        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+        <span className="text-sm sm:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 truncate">
           ProductAI 智能图生图 (Cutout Studio)
         </span>
         <button
           onClick={toggleAdmin}
-          className="ml-auto p-2 hover:bg-white/5 rounded-lg text-slate-500 hover:text-purple-400 transition-colors"
+          className="ml-auto p-2 hover:bg-white/5 rounded-lg text-slate-500 hover:text-purple-400 transition-colors shrink-0"
           title="Open Admin Dashboard"
         >
-          <Settings className="w-5 h-5" />
+          <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
       </header>
 
@@ -91,7 +91,7 @@ const AppContent = () => {
       )}
 
       {/* Main Split Layout */}
-      <main className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-140px)] min-h-[600px]">
+      <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 min-h-screen lg:h-[calc(100vh-140px)] lg:min-h-[600px]">
 
         {/* Left Column: Config Panel (1/3) */}
         <div className="w-full lg:col-span-1 flex-shrink-0 h-full overflow-y-auto custom-scrollbar lg:sticky lg:top-0 space-y-6">
@@ -157,14 +157,14 @@ const ActionBar = () => {
           onClick={() => generateAll(activeTab)}
           disabled={isProcessing || Object.keys(viewImages).length === 0}
           className={`
-                        flex-1 py-4 rounded-xl font-bold text-lg shadow-xl transition-all duration-300 flex items-center justify-center gap-3
+                        flex-1 py-3 sm:py-4 rounded-xl font-bold text-sm sm:text-lg shadow-xl transition-all duration-300 flex items-center justify-center gap-2 sm:gap-3
                         ${isProcessing || Object.keys(viewImages).length === 0
               ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
               : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:scale-[1.02] hover:shadow-blue-500/25 text-white cursor-pointer'}
                     `}
         >
-          {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-6 h-6 fill-current" />}
-          <span>{isProcessing ? `生成中... ${displayStatus}` : "全部生成 (Generate All)"}</span>
+          {isProcessing ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />}
+          <span className="truncate">{isProcessing ? `生成中: ${displayStatus}` : "全部生成 (Generate All)"}</span>
         </button>
 
         {/* Download Button */}

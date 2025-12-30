@@ -27,16 +27,16 @@ const LoginPage = () => {
 
             <div className="w-full max-w-md">
                 {/* Logo */}
-                <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 shadow-2xl shadow-purple-500/30 mb-4">
-                        <Sparkles className="w-8 h-8 text-white" />
+                <div className="text-center mb-6 sm:mb-8">
+                    <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 shadow-2xl shadow-purple-500/30 mb-4">
+                        <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">ProductAI Studio</h1>
-                    <p className="text-sm text-slate-500 mt-1">智能图生图平台</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-white">ProductAI Studio</h1>
+                    <p className="text-[10px] sm:text-sm text-slate-500 mt-1">智能图生图平台</p>
                 </div>
 
                 {/* Login Card */}
-                <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+                <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl">
                     <h2 className="text-xl font-bold text-white mb-6 text-center">登录</h2>
 
                     {error && (

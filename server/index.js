@@ -69,6 +69,16 @@ app.use(session({
     }
 }));
 
+// Health Check
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        uptime: process.uptime(),
+        node: process.version,
+        env: process.env.NODE_ENV
+    });
+});
+
 // API Routes
 app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
@@ -90,11 +100,12 @@ if (process.env.NODE_ENV === 'production') {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('[Server Error]', err);
+    console.error(`[Server Error] ${req.method} ${req.url}:`, err);
     res.status(500).json({
         error: process.env.NODE_ENV === 'production'
             ? 'Internal server error'
-            : err.message
+            : err.message,
+        stack: process.env.NODE_ENV === 'production' ? undefined : err.stack
     });
 });
 

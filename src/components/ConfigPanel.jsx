@@ -134,15 +134,15 @@ const ConfigPanel = () => {
     };
 
     return (
-        <div className="w-full glass-panel rounded-[2rem] p-8 space-y-8 mt-6 border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)]">
+        <div className="w-full glass-panel rounded-2xl sm:rounded-[2rem] p-4 sm:p-8 space-y-6 sm:space-y-8 mt-4 sm:mt-6 border border-white/10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)]">
 
             {/* 1. Header & Mode Switch */}
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-6 border-b border-white/5">
-                <div className="flex items-center gap-4">
-                    <div className="w-2 h-8 bg-gradient-to-b from-purple-500 to-indigo-600 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6 pb-6 border-b border-white/5">
+                <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-1.5 sm:w-2 h-6 sm:h-8 bg-gradient-to-b from-purple-500 to-indigo-600 rounded-full shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
                     <div>
-                        <h3 className="text-2xl font-bold text-white tracking-tight">配置面板</h3>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-0.5">Studio Core v3.0 (核心版本)</p>
+                        <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">配置面板</h3>
+                        <p className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-0.5">Studio Core v3.0 (核心版本)</p>
                     </div>
                 </div>
                 <ModeSelector activeMode={config.promptSet} onChange={handleChange} />

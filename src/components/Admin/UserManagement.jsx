@@ -128,76 +128,78 @@ const UserManagement = () => {
             )}
 
             {/* Users Table */}
-            <div className="bg-slate-900/50 border border-white/5 rounded-xl overflow-hidden">
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                    </div>
-                ) : (
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-white/5 text-left">
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">用户</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">角色</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">状态</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">创建时间</th>
-                                <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.map(user => (
-                                <tr key={user.id} className="border-b border-white/5 hover:bg-white/5">
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${user.role === 'admin' ? 'bg-purple-500/20' : 'bg-slate-700'}`}>
-                                                {user.role === 'admin' ? (
-                                                    <Shield className="w-4 h-4 text-purple-400" />
-                                                ) : (
-                                                    <User className="w-4 h-4 text-slate-400" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-medium text-white">{user.display_name || user.username}</div>
-                                                <div className="text-xs text-slate-500">@{user.username}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-300' : 'bg-slate-700 text-slate-300'}`}>
-                                            {user.role === 'admin' ? '管理员' : '用户'}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${user.is_active ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
-                                            {user.is_active ? '活跃' : '禁用'}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-sm text-slate-400">
-                                        {new Date(user.created_at).toLocaleDateString('zh-CN')}
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex gap-1">
-                                            <button
-                                                onClick={() => setEditingUser(user)}
-                                                className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
-                                                title="编辑"
-                                            >
-                                                <Edit3 className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteUser(user.id)}
-                                                className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400 transition-colors"
-                                                title="删除"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </td>
+            <div className="bg-slate-900/50 border border-white/5 rounded-xl overflow-x-auto custom-scrollbar">
+                <div className="min-w-[800px]">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+                        </div>
+                    ) : (
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-white/5 text-left">
+                                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">用户</th>
+                                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">角色</th>
+                                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">状态</th>
+                                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">创建时间</th>
+                                    <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase">操作</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                            </thead>
+                            <tbody>
+                                {users.map(user => (
+                                    <tr key={user.id} className="border-b border-white/5 hover:bg-white/5">
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${user.role === 'admin' ? 'bg-purple-500/20' : 'bg-slate-700'}`}>
+                                                    {user.role === 'admin' ? (
+                                                        <Shield className="w-4 h-4 text-purple-400" />
+                                                    ) : (
+                                                        <User className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-medium text-white">{user.display_name || user.username}</div>
+                                                    <div className="text-xs text-slate-500">@{user.username}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${user.role === 'admin' ? 'bg-purple-500/20 text-purple-300' : 'bg-slate-700 text-slate-300'}`}>
+                                                {user.role === 'admin' ? '管理员' : '用户'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold ${user.is_active ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                                                {user.is_active ? '活跃' : '禁用'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-slate-400">
+                                            {new Date(user.created_at).toLocaleDateString('zh-CN')}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={() => setEditingUser(user)}
+                                                    className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
+                                                    title="编辑"
+                                                >
+                                                    <Edit3 className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteUser(user.id)}
+                                                    className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400 transition-colors"
+                                                    title="删除"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
             </div>
 
             {/* Create Modal */}

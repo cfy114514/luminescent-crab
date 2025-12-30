@@ -107,10 +107,10 @@ const WorkflowRow = ({
             </div>
 
             {/* 0. PERSPECTIVE SELECTOR + POSE REFERENCE */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-row md:flex-col lg:flex-row items-center gap-2 sm:gap-3">
                 {/* Manual Perspective Selector */}
-                <div className="flex flex-col gap-1.5 p-1.5 bg-slate-900/50 rounded-lg border border-slate-800">
-                    <span className="text-[7px] font-black text-slate-500 uppercase text-center mb-0.5">Focus</span>
+                <div className="flex flex-row md:flex-col gap-1.5 p-1.5 bg-slate-900/50 rounded-lg border border-slate-800 shrink-0">
+                    <span className="hidden md:block text-[7px] font-black text-slate-500 uppercase text-center mb-0.5">Focus</span>
                     {perspectives.map(p => {
                         const isActive = metadata?.perspective === p.id;
                         return (
@@ -118,15 +118,15 @@ const WorkflowRow = ({
                                 key={p.id}
                                 onClick={() => onMetadataChange(slot.id, { ...metadata, perspective: isActive ? null : p.id })}
                                 className={`
-                                    w-8 h-8 rounded-md flex flex-col items-center justify-center transition-all
+                                    w-7 h-7 sm:w-8 sm:h-8 rounded-md flex flex-col items-center justify-center transition-all
                                     ${isActive
                                         ? 'bg-white/10 ring-1 ring-white/20'
                                         : 'hover:bg-white/5 opacity-40 hover:opacity-100'}
                                 `}
                                 title={`${p.label}面对正 (Locked to ${p.id} perspective)`}
                             >
-                                <p.icon className={`w-3.5 h-3.5 ${isActive ? p.color : 'text-slate-400'}`} />
-                                <span className={`text-[8px] font-bold ${isActive ? 'text-white' : 'text-slate-500'}`}>{p.label}</span>
+                                <p.icon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isActive ? p.color : 'text-slate-400'}`} />
+                                <span className={`text-[7px] sm:text-[8px] font-bold ${isActive ? 'text-white' : 'text-slate-500'}`}>{p.label}</span>
                             </button>
                         );
                     })}
@@ -136,7 +136,7 @@ const WorkflowRow = ({
                     <div
                         {...getPoseRootProps()}
                         className={`
-                        relative w-32 aspect-[3/4] rounded-lg border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-2 text-center overflow-hidden
+                        relative w-20 sm:w-32 aspect-[3/4] rounded-lg border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-1 sm:p-2 text-center overflow-hidden shrink-0
                         ${poseFile ? 'border-transparent bg-slate-900' : 'border-purple-500/30 bg-purple-500/5 hover:bg-purple-500/10'}
                         ${isPoseDragActive ? 'border-purple-500 bg-purple-500/20' : ''}
                     `}
