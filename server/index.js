@@ -51,6 +51,10 @@ app.use(cors({
 // Body parsing
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Trust proxy (required for secure cookies behind Nginx)
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
 
 // Session configuration
 app.use(session({
@@ -60,6 +64,7 @@ app.use(session({
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
+        sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
